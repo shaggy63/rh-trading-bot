@@ -1,0 +1,4 @@
+config.py
+*.out
+*.pickle
+__pycache__
