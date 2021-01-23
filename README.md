@@ -25,7 +25,7 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `cashReserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stopLoss`: Threshold below which the bot will sell its holdings, regardless of any gains
 
-# Running the bot
+## Running the bot
 If you want to keep the bot running even when you're not logged into your server, I recommend using the [nohup](https://linuxize.com/post/linux-nohup-command/) command in Linux. It will save all the output in a file called `nohup.out`, where you can see what the bot is thinking. Information about the bot's state is also saved in three pickle files, so that if you stop and restart it, it will continue from where it left off:
 
 > `nohup ./bot.py &`
