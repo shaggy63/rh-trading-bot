@@ -123,11 +123,7 @@ class moneyBot:
         self.rsiWindow = cfg.config[ 'rsiWindow' ]
         self.rsiOversold = cfg.config[ 'rsiOversold' ]
         self.movingAverageWindows = cfg.config[ 'movingAverageWindows' ]
-
-        # When to run next (random minute)
-        futureTime = datetime.now() + timedelta( 0, random.randint( self.minSecondsBetweenUpdates, self.maxSecondsBetweenUpdates - 1 ) )
-        self.nextMinute = futureTime.minute
-        print( 'Next Run (minute): ' + str( self.nextMinute ) )
+        self.nextMinute = datetime.now().minute
 
         self.tradesEnabled = cfg.config[ 'tradesEnabled' ]
         print( 'Trades enabled: ' + str( self.tradesEnabled ) )
@@ -364,7 +360,7 @@ class moneyBot:
                     print("Got exception trying to buy, cancelling.")
                     return
 
-                print("Bought " + str(shares) + " shares of " + self.coinList[c] + " at " + str(price) + " selling at " + str(round(sellAt, 2)))
+                print("Placed an order for " + str(shares) + " shares of " + self.coinList[c] + " at " + str(price) + " selling at " + str(round(sellAt, 2)))
                 self.coinState[c].purchasedPrice = price
                 self.coinState[c].timeBought = str( datetime.now() )
                 self.coinState[c].numBought = shares
