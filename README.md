@@ -9,8 +9,8 @@ To use Jason's words: cryptocurrency investing is *risky*! Doing it using a comp
 
 ## Installation
 You'll need access to a working Python3 interpreter. For the sake of simplicity, I am going to assume that you know your way around a Linux shell, and that you have [pip3](https://linuxize.com/post/how-to-install-pip-on-ubuntu-18.04/#installing-pip-for-python-3) on your machine. Install the following dependencies:
-* [Robin-Stock](http://www.robin-stocks.com/en/latest/quickstart.html): pip3 install robin_stocks
-* [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): pip3 install pandas
+* [Robin-Stock](http://www.robin-stocks.com/en/latest/quickstart.html): `pip3 install robin_stocks`
+* [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): `pip3 install pandas`
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
 Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your RobinHood username and password there. You can also customize the script's behavior through the other parameters:
@@ -24,3 +24,22 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `rsiOversold`: Threshold below which the bot will try to buy
 * (float) `cashReserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stopLoss`: Threshold below which the bot will sell its holdings, regardless of any gains
+
+# Running the bot
+If you want to keep the bot running even when you're not logged into your server, I recommend using the [nohup](https://linuxize.com/post/linux-nohup-command/) command in Linux. It will save all the output in a file called `nohup.out`, where you can see what the bot is thinking. Information about the bot's state is also saved in three pickle files, so that if you stop and restart it, it will continue from where it left off:
+
+> `nohup ./bot.py &`
+
+The overall flow looks like this:
+* Initialize or load a previously saved state
+* Load the configuration
+* Determine when to run next
+* If it's time to spring into action, download the current price data from RobinHood
+* Compute [moving average](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
+* Append this information to a pickle data file
+* Check if the conditions to buy or sell are met, depending on the local wallet being empty or not
+* Submit the order and check that it went through
+* Loop again
+If the data hasn’t had a break, check conditions to see if we should buy, for each coin.
+Check to see if we should sell each coin. Moving average and RSI are not used here.
+Save state information. Loop again.
