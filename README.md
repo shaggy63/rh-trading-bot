@@ -43,3 +43,6 @@ The overall flow looks like this:
 If the data hasn’t had a break, check conditions to see if we should buy, for each coin.
 Check to see if we should sell each coin. Moving average and RSI are not used here.
 Save state information. Loop again.
+
+## Additional Notes
+This code is *far* from perfect and can certainly be improved. Waking up and finding that the bot has made money for you while you were sleeping can be cool. Watching the price continue to plunge after the bot buys, not so much. Remember, there's no logic to try and locate the bottom of a dip. And that's, in a way, why I decided to publish these experiments here on Github: if you feel like lending a hand, submit a pull request, don't be shy!
