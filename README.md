@@ -18,8 +18,8 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `buyBelowMA`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
 * (float) `sellAboveBuyPrice`: Once the price rises above the Buy price by this percentage, it will try to sell
 * (int) `movingAverageWindows`: Number of MA observations to wait before sprinting into action
-* (int) `minSecondsBetweenUpdates` and `maxSecondsBetweenUpdates`: This bot will pick a random wait time in between readings; use these value to define that range
-* (list) `coinList`: List of tickers for the coins you want to trade (BTC, ETH, etc)
+* (int) `minSecondsBetweenUpdates` and `maxSecondsBetweenUpdates`: This bot will pick a random wait time in between readings; use these values to define that range
+* (list) `coinList`: List of coin tickers you want to trade (BTC, ETH, etc)
 * (int) `rsiWindow`: Length of the observation window for calculating the RSI
 * (float) `rsiOversold`: Threshold below which the bot will try to buy
 * (float) `cashReserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
