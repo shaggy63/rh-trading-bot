@@ -306,13 +306,7 @@ class moneyBot:
                     self.availableCash = random.randint( 1000, 5000 ) + config[ 'cashReserve' ]
 
                 for ticker, state in self.coinState.items():
-                    print( str( ticker ) + ': ' + str( state.numBought ) )
-            
-                    if ( state.numBought > 0.0 ):
-                        print( 'Cost: $' + str( state.numBought * state.purchasedPrice ) )
-                        print( 'Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 2 ) ) )
-
-                     # Check for swing/miss on each coin here
+                    # Check for swing/miss on each coin here
                     if ( self.availableCash < 1 and state.timeBought != '' ):
                         timeDiffBuyOrder = now - datetime.strptime( state.timeBought, '%Y-%m-%d %H:%M:%S.%f' )
                         availableCoin = self.getHoldings( ticker )
@@ -324,6 +318,12 @@ class moneyBot:
                             self.coinState[ ticker ].numBought = 0.0
                             self.coinState[ ticker ].lastBuyOrderID = ''
                             self.coinState[ ticker ].timeBought = ''
+
+                    print( str( ticker ) + ': ' + str( state.numBought ) )
+            
+                    if ( state.numBought > 0.0 ):
+                        print( 'Cost: $' + str( state.numBought * state.purchasedPrice ) )
+                        print( 'Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 2 ) ) )
 
                 # Save state
                 with open( 'state.pickle', 'wb' ) as f:
