@@ -14,14 +14,16 @@ You'll need access to a working Python3 interpreter. For the sake of simplicity,
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
 Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your RobinHood username and password there. You can also customize the script's behavior through the other parameters:
+* (string) `username` and `password`: Your Robinhood credentials
 * (bool) `tradesEnabled`:  Run the bot in test mode and just collect data, or allow it to submit orders
+* (bool) `debugEnabled`: Simulate interactions with Robinhood (via random values)
+* (list) `tickerList`: List of coin tickers you want to trade (BTC, ETH, etc)
 * (float) `buyBelowMA`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
 * (float) `sellAboveBuyPrice`: Once the price rises above the Buy price by this percentage, it will try to sell
-* (int) `movingAverageWindows`: Number of MA observations to wait before sprinting into action
-* (int) `minSecondsBetweenUpdates` and `maxSecondsBetweenUpdates`: This bot will pick a random wait time in between readings; use these values to define that range
-* (list) `coinList`: List of coin tickers you want to trade (BTC, ETH, etc)
-* (int) `rsiWindow`: Length of the observation window for calculating the RSI
+* (int) `movingAveragePeriods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
+* (int) `rsiPeriod`: Length of the observation window for calculating the RSI
 * (float) `rsiOversold`: Threshold below which the bot will try to buy
+* (int) `minSecondsBetweenUpdates` and `maxSecondsBetweenUpdates`: This bot will pick a random wait time in between readings; use these values to define that range
 * (float) `cashReserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stopLoss`: Threshold below which the bot will sell its holdings, regardless of any gains
 
