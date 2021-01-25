@@ -39,9 +39,19 @@ The overall flow looks like this:
 * If it's time to spring into action, download the current price data from RobinHood
 * Compute [moving average](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
 * Append this information to a pickle data file
-* Check if the conditions to buy or sell are met, depending on the local wallet being empty or not
-* Submit the order and check that it went through
+* Check if the conditions to buy or sell are met
+* If they are, submit the corresponding order and check if it went through
 * Loop again
+
+## Technical Analysis
+
+### Relative Strength Index and Simple Moving Average
+The RSI trading indicator is a measure of the relative strength of the market (compared to its history), a momentum oscillator and is often used as an overbought and oversold technical indicator. The RSI is displayed as a line graph that moves between two extremes from 0 to 100. Traditional interpretation and usage of the RSI are that values of 70 or above indicate that a security is becoming overvalued and the price of the security is likely to go down in the future (bearish), while the RSI reading of 30 or below indicates an oversold or undervalued condition and the price of the security is likely to go up in the future (bullish). Our bot uses this information to determine when it's *time to buy*, by checking if the current RSI is below the threshold set in the config file (39.5 by default). It also checks that the current price is below the SMA by the percentage configured in the settings. If those two conditions are met, it will submit a buy using all the available cash in the account (minus the reserve).
+
+The simple strategy outlined here above can be expanded [in many ways](https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b). To that end, this bot keeps track of a few indicators that can be used to [determine if it's time to buy or sell](https://towardsdatascience.com/algorithmic-trading-with-macd-and-python-fef3d013e9f3): SMA fast, SMA slow, RSI, MACD, MACD Signal. Future versions will include ways to select which approach you would like to use. 
+
+### Backtesting
+Backtesting is the process of testing a trading or investment strategy using data from the past to see how it would have performed. For example, let's say your trading strategy is to buy Bitcoin when it falls 3% in a day, your backtest software will check Bitcoin's prices in the past and fire a trade when it fell 3% in a day. The backtest results will show if the trades were profitable. At this time, this bot doesn't offer an easy way to ingest past data and run simulations, but it's something I have on my wishlist for sure.
 
 ## Additional Notes
 This code is *far* from perfect and can certainly be improved. Waking up and finding that the bot has made money for you while you were sleeping can be cool. Watching the price continue to plunge after the bot buys, not so much. Remember, there's no logic to try and locate the bottom of a dip. And that's, in a way, why I decided to publish these experiments here on Github: if you feel like lending a hand, submit a pull request, don't be shy!
