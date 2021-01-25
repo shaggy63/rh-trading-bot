@@ -216,7 +216,6 @@ class moneyBot:
         if ( not config[ 'debugEnabled' ] ):
             try:
                 cancelResult = r.cancel_crypto_order( orderID )
-                print( str( cancelResult ) )
             except:
                 print( 'Got exception canceling order, will try again.' )
                 return False
@@ -306,6 +305,32 @@ class moneyBot:
                 else:
                     self.availableCash = random.randint( 1000, 5000 ) + config[ 'cashReserve' ]
 
+                for ticker, state in self.coinState.items():
+                    print( str( ticker ) + ': ' + str( state.numBought ) )
+            
+                    if ( state.numBought > 0.0 ):
+                        print( 'Cost: $' + str( state.numBought * state.purchasedPrice ) )
+                        print( 'Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 2 ) ) )
+
+                     # Check for swing/miss on each coin here
+                    if ( self.availableCash < 1 and state.timeBought != '' ):
+                        timeDiffBuyOrder = now - datetime.strptime( state.timeBought, '%Y-%m-%d %H:%M:%S.%f' )
+                        availableCoin = self.getHoldings( ticker )
+                        if availableCoin == -1:
+                            print( 'Error trying to get holdings while checking for swing/miss, cancelling.' )
+                        elif ( availableCoin < state.numBought and self.cancelOrder( state.lastBuyOrderID ) ):
+                            self.availableCash = self.coinState[ ticker ].purchasedPrice * self.coinState[ ticker ].numBought
+                            self.coinState[ ticker ].purchasedPrice = 0.0
+                            self.coinState[ ticker ].numBought = 0.0
+                            self.coinState[ ticker ].lastBuyOrderID = ''
+                            self.coinState[ ticker ].timeBought = ''
+
+                # Save state
+                with open( 'state.pickle', 'wb' ) as f:
+                    pickle.dump( self.coinState, f )
+
+                self.data.to_pickle( 'dataframe.pickle' )
+
                 # Print state
                 print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
                 print( self.data.tail() )
@@ -313,37 +338,6 @@ class moneyBot:
                 print( '$' + str( self.availableCash ) + ' available for trading' )
                 print( 'Trading Locked: ' + str( self.tradingLocked ) )
                 print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
-
-                for ticker, state in self.coinState.items():
-                    print( str( ticker ) + ': ' + str( state.numBought ) )
-            
-                if ( state.numBought > 0.0 ):
-                    print( 'Cost: $' + str( state.numBought * state.purchasedPrice ) )
-                    print( 'Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 2 ) ) )
-
-                # Save current state
-                with open( 'state.pickle', 'wb' ) as f:
-                    pickle.dump( self.coinState, f )
-
-                self.data.to_pickle( 'dataframe.pickle' )
-
-                # Check for swing/miss on each coin here
-                if ( self.availableCash < 1 ):
-                    for ticker, state in self.coinState.items():
-                        if ( state.timeBought != '' ):
-                            timeDiffBuyOrder = now - datetime.strptime( state.timeBought, '%Y-%m-%d %H:%M:%S.%f' )
-                            availableCoin = self.getHoldings( ticker )
-                            if availableCoin == -1:
-                                print( 'Error trying to get holdings while checking for swing/miss, cancelling.' )
-                            # It's been more than an hour and the coins haven't been added to the account (order still pending?)
-                            elif ( timeDiffBuyOrder.total_seconds() > 3600 and availableCoin < state.numBought ):
-                                isCancelled = self.cancelOrder( state.lastBuyOrderID )
-                                if ( isCancelled ):
-                                    self.availableCash = self.coinState[ ticker ].purchasedPrice * self.coinState[ ticker ].numBought
-                                    self.coinState[ ticker ].purchasedPrice = 0.0
-                                    self.coinState[ ticker ].numBought = 0.0
-                                    self.coinState[ ticker ].lastBuyOrderID = ''
-                                    self.coinState[ ticker ].timeBought = ''
 
                 # We don't have enough consecutive data points to decide what to do
                 if ( not self.checkConsecutive( now ) ):
