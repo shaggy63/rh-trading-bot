@@ -280,7 +280,6 @@ class moneyBot:
             self.coinState[ ticker ].purchasedPrice = price
             self.coinState[ ticker ].timeBought = str( datetime.now() )
             self.coinState[ ticker ].numBought = shares
-            self.boughtIn = True
 
         return
 
