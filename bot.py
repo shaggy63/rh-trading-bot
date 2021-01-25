@@ -189,7 +189,7 @@ class moneyBot:
         position = len( self.data ) - 1
         if ( position >= self.minConsecutiveSamples ):
             for x in range( 0, self.minConsecutiveSamples ):
-                timediff = self.data.iloc[ position - x ][ 'timestamp' ] - self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ]
+                timediff = datetime.strptime( self.data.iloc[ position - x ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) - datetime.strptime( self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) 
 
                 if ( timediff.seconds > config[ 'maxSecondsBetweenUpdates' ] * 2 ):
                     print( 'Interruption found in price data, holding buys until sufficient samples are collected.' )
@@ -220,8 +220,8 @@ class moneyBot:
             self.data = self.data.append( newRow, ignore_index = True )
 
             if ( self.data.shape[ 0 ] > 0 ):
-                self.data[ ticker + '_SMA_F' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'movingAveragePeriods' ][ 0 ] ).mean().iloc[ -1 ]
-                self.data[ ticker + '_SMA_S' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'movingAveragePeriods' ][ 1 ] ).mean().iloc[ -1 ]
+                self.data[ ticker + '_SMA_F' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'movingAveragePeriods' ][ 0 ] ).mean()
+                self.data[ ticker + '_SMA_S' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'movingAveragePeriods' ][ 1 ] ).mean()
                 self.data[ ticker + '_RSI' ] = talib.RSI( self.data[ ticker ].values, timeperiod = config[ 'rsiPeriod' ] )
                 self.data[ ticker + '_MACD' ], self.data[ ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ ticker ].values, fastperiod = config[ 'movingAveragePeriods' ][ 2 ], slowperiod = config[ 'movingAveragePeriods' ][ 3 ], signalperiod = config[ 'movingAveragePeriods' ][ 4 ] )
 
