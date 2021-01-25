@@ -305,6 +305,14 @@ class moneyBot:
                 else:
                     self.availableCash = random.randint( 1000, 5000 ) + config[ 'cashReserve' ]
 
+                # Print state
+                print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
+                print( self.data.tail() )
+                print( '-- Bot Status ---------------------------' )
+                print( '$' + str( self.availableCash ) + ' available for trading' )
+                print( 'Trading Locked: ' + str( self.tradingLocked ) )
+                print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
+
                 for ticker, state in self.coinState.items():
                     # Check for swing/miss on each coin here
                     if ( self.availableCash < 1 and state.timeBought != '' ):
@@ -330,14 +338,6 @@ class moneyBot:
                     pickle.dump( self.coinState, f )
 
                 self.data.to_pickle( 'dataframe.pickle' )
-
-                # Print state
-                print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
-                print( self.data.tail() )
-                print( '-- Bot Status ---------------------------' )
-                print( '$' + str( self.availableCash ) + ' available for trading' )
-                print( 'Trading Locked: ' + str( self.tradingLocked ) )
-                print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
 
                 # We don't have enough consecutive data points to decide what to do
                 if ( not self.checkConsecutive( now ) ):
