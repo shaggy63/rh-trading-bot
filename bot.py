@@ -223,11 +223,6 @@ class moneyBot:
         return True
 
     def sell( self, ticker, price ):
-        # Check if a previous sell has not completed: we should have cash available
-        if ( self.availableCash < 1 ):
-            print( 'Previous sale incomplete.' )
-            return
-
         # Sell only what previously bought
         availableCoin = self.coinState[ ticker ].numBought
 
@@ -259,7 +254,6 @@ class moneyBot:
         if ( self.availableCash < 1 ):
             print( 'Previous buy incomplete.' )
             return
-
 
         # Values need to be specified to no more precision than listed in minPriceIncrement. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
         price = round( math.floor( price / self.minPriceIncrements[ ticker ] ) * self.minPriceIncrements[ ticker ], 7 )
@@ -309,9 +303,9 @@ class moneyBot:
                 print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
                 print( self.data.tail() )
                 print( '-- Bot Status ---------------------------' )
+                print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
                 print( '$' + str( self.availableCash ) + ' available for trading' )
                 print( 'Trading Locked: ' + str( self.tradingLocked ) )
-                print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
 
                 for ticker, state in self.coinState.items():
                     # Check for swing/miss on each coin here
@@ -327,11 +321,14 @@ class moneyBot:
                             self.coinState[ ticker ].lastBuyOrderID = ''
                             self.coinState[ ticker ].timeBought = ''
 
-                    print( str( ticker ) + ': ' + str( state.numBought ) )
+                    print( str( ticker ) + ': ' + str( state.numBought ), end = '' )
             
                     if ( state.numBought > 0.0 ):
-                        print( 'Cost: $' + str( state.numBought * state.purchasedPrice ) )
-                        print( 'Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 2 ) ) )
+                        coinCost = state.numBought * state.purchasedPrice
+                        targetProfit = coinCost * config[ 'sellAboveBuyPrice' ]
+                        print( ' | Cost: $' + str( round( coinCost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * state.numBought, 3 ) ) + ' | Selling at $' + str( round( coinCost + targetProfit, 3 ) ) )
+                    else:
+                        print( "\n" )
 
                 # Save state
                 with open( 'state.pickle', 'wb' ) as f:
