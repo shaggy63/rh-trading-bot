@@ -54,12 +54,12 @@ class moneyBot:
     minPriceIncrements = {}   #the smallest fraction of a dollar you can buy/sell a coin with
     minConsecutiveSamples = 0
     
-    boughtIn = False
+    availableCash = 0
     nextMinute = 0
     tradingLocked = False # used to determine if we have had a break in our incoming price data and hold buys if so
 
     def __init__( self ):
-        # Output all columns
+        # Set Pandas to output all columns in the dataframe
         pd.set_option( 'display.max_columns', None )
         pd.set_option( 'display.width', 300 )
 
@@ -97,10 +97,6 @@ class moneyBot:
             for c in config[ 'tickerList' ]:
                 self.coinState[ c ] = coin( c )
 
-        if path.exists( 'boughtIn.pickle' ):
-            with open( 'boughtIn.pickle', 'rb' ) as f:
-                self.boughtIn = pickle.load( f )
-
         # Load data points
         if ( path.exists( 'dataframe.pickle' ) ):
             self.data = pd.read_pickle( 'dataframe.pickle' )
@@ -115,7 +111,7 @@ class moneyBot:
         # Connect to RobinHood
         if ( not config[ 'debugEnabled' ] ):
             try:
-                r.login( config[ 'username' ], config[ 'password' ] )
+                rhResponse = r.login( config[ 'username' ], config[ 'password' ] )
             except:
                 print( 'Got exception while attempting to log into RobinHood.' )
                 exit()
@@ -241,25 +237,25 @@ class moneyBot:
         return True
 
     def sell( self, ticker, price ):
-        if ( self.boughtIn ):
-            # A previous sell has not completed. We are marked as not in the market but still holding coin, abort sale.
+        # Check if a previous sell has not completed: we should have cash available
+        if ( self.availableCash < 1 ):
             print( 'Previous sale incomplete.' )
             return
 
         # Sell only what previously bought
-        coinHeld = self.coinState[ ticker ].numBought
+        availableCoin = self.coinState[ ticker ].numBought
 
-        if ( coinHeld > 0.0 ):
+        if ( availableCoin > 0.0 ):
             # Price needs to be specified to no more precision than listed in minPriceIncrement. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
             price = round( math.floor( price / self.minPriceIncrements[ ticker ] ) * self.minPriceIncrements[ ticker ], 7 )  
-            profit = ( coinHeld * price ) - ( coinHeld * c.purchasedPrice )
+            profit = ( availableCoin * price ) - ( availableCoin * self.coinState[ ticker ].purchasedPrice )
 
-            print( 'Selling ' + str( ticker ) + ' ' + str( coinHeld ) + ' for $' + str( price ) + ' (profit: $' + str( round( profit, 2 ) ) + ')' )
+            print( 'Selling ' + str( ticker ) + ' ' + str( availableCoin ) + ' for $' + str( price ) + ' (profit: $' + str( round( profit, 2 ) ) + ')' )
 
             if ( config[ 'tradesEnabled' ] ):
                 if ( not config[ 'debugEnabled' ] ):
                     try:
-                        sellResult = r.order_sell_crypto_limit( str( ticker ), coinHeld, price )
+                        sellResult = r.order_sell_crypto_limit( str( ticker ), availableCoin, price )
                         self.coinState[ ticker ].lastSellOrder = sellResult[ 'id' ]
                     except:
                         print( 'Got exception trying to sell, cancelling trade.' )
@@ -269,41 +265,35 @@ class moneyBot:
                 self.coinState[ ticker ].numBought = 0.0
                 self.coinState[ ticker ].lastBuyOrderID = ''
                 self.coinState[ ticker ].timeBought = ''
-                self.boughtIn = False
 
         return
 
     def buy( self, ticker, price ):
         # If we are already in the process of a buy, don't submit another
-        if ( self.boughtIn ):
-            print( 'Previous buy incomplete.')
+        if ( self.availableCash < 1 ):
+            print( 'Previous buy incomplete.' )
             return
 
-        availableCash = self.getCash()
-        if availableCash == -1:
-            print( 'Got an exception checking for available cash, canceling buy.' )
-            return
 
-        if ( availableCash > 1.0 ):
-            # Values need to be specified to no more precision than listed in minPriceIncrement. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-            price = round( math.floor( price / self.minPriceIncrements[ ticker ] ) * self.minPriceIncrements[ ticker ], 7 )
-            shares = ( availableCash - 0.25 ) / price
-            shares = round( math.floor( shares / self.minShareIncrements[ ticker ] ) * self.minShareIncrements[ ticker ], 8 )
-            print( 'Buying ' + str( ticker ) + ' ' + str( shares ) + ' at $' + str( price ) )
+        # Values need to be specified to no more precision than listed in minPriceIncrement. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
+        price = round( math.floor( price / self.minPriceIncrements[ ticker ] ) * self.minPriceIncrements[ ticker ], 7 )
+        shares = ( self.availableCash - 0.25 ) / price
+        shares = round( math.floor( shares / self.minShareIncrements[ ticker ] ) * self.minShareIncrements[ ticker ], 8 )
+        print( 'Buying ' + str( ticker ) + ' ' + str( shares ) + ' at $' + str( price ) )
 
-            if ( config[ 'tradesEnabled' ] ):
-                if ( not config[ 'debugEnabled' ] ):
-                    try:
-                        buyResult = r.order_buy_crypto_limit( str( ticker ), shares, price )
-                        self.coinState[ ticker ].lastBuyOrderID = buyResult[ 'id' ]
-                    except:
-                        print( 'Got exception trying to buy, cancelling.' )
-                        return
+        if ( config[ 'tradesEnabled' ] ):
+            if ( not config[ 'debugEnabled' ] ):
+                try:
+                    buyResult = r.order_buy_crypto_limit( str( ticker ), shares, price )
+                    self.coinState[ ticker ].lastBuyOrderID = buyResult[ 'id' ]
+                except:
+                    print( 'Got exception trying to buy, cancelling.' )
+                    return
 
-                self.coinState[ ticker ].purchasedPrice = price
-                self.coinState[ ticker ].timeBought = str( datetime.now() )
-                self.coinState[ ticker ].numBought = shares
-                self.boughtIn = True
+            self.coinState[ ticker ].purchasedPrice = price
+            self.coinState[ ticker ].timeBought = str( datetime.now() )
+            self.coinState[ ticker ].numBought = shares
+            self.boughtIn = True
 
         return
 
@@ -319,11 +309,14 @@ class moneyBot:
                 futureTime = now + timedelta( 0, random.randint( config[ 'minSecondsBetweenUpdates' ], config[ 'maxSecondsBetweenUpdates' ] - 1 ) )
                 self.nextMinute = futureTime.minute
 
+                # Refresh the cash amount available for trading
+                self.availableCash = self.getCash()
+
                 # Print state
                 print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
                 print( self.data.tail() )
                 print( '-- Bot Status ---------------------------' )
-                print( '$' + str( self.getCash() ) + ' available for trading (' + str( config[ 'cashReserve' ] ) + ' reserve)' )
+                print( '$' + str( self.getCash() ) + ' available for trading' )
                 print( 'Trading Locked: ' + str( self.tradingLocked ) )
                 print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
 
@@ -338,28 +331,25 @@ class moneyBot:
                 with open( 'state.pickle', 'wb' ) as f:
                     pickle.dump( self.coinState, f )
 
-                with open( 'boughtIn.pickle', 'wb' ) as f:
-                    pickle.dump( self.boughtIn, f )
-
                 self.data.to_pickle( 'dataframe.pickle' )
 
                 # Check for swing/miss on each coin here
-                if ( self.boughtIn ):
+                if ( self.availableCash < 1 ):
                     for ticker, state in self.coinState.items():
                         if ( state.timeBought != '' ):
                             timeDiffBuyOrder = now - datetime.strptime( state.timeBought, '%Y-%m-%d %H:%M:%S.%f' )
-                            coinHeld = self.getHoldings( ticker )
-                            if coinHeld == -1:
+                            availableCoin = self.getHoldings( ticker )
+                            if availableCoin == -1:
                                 print( 'Error trying to get holdings while checking for swing/miss, cancelling.' )
                             # It's been more than an hour and the coins haven't been added to the account (order still pending?)
-                            elif ( timeDiffBuyOrder.total_seconds() > 3600 and coinHeld < c.numBought ):
-                                isCancelled = self.cancelOrder( c.lastBuyOrderID )
+                            elif ( timeDiffBuyOrder.total_seconds() > 3600 and availableCoin < state.numBought ):
+                                isCancelled = self.cancelOrder( state.lastBuyOrderID )
                                 if ( isCancelled ):
+                                    self.availableCash = self.coinState[ ticker ].purchasedPrice * self.coinState[ ticker ].numBought
                                     self.coinState[ ticker ].purchasedPrice = 0.0
                                     self.coinState[ ticker ].numBought = 0.0
                                     self.coinState[ ticker ].lastBuyOrderID = ''
                                     self.coinState[ ticker ].timeBought = ''
-                                    self.boughtIn = False
 
                 # We don't have enough consecutive data points to decide what to do
                 if ( not self.checkConsecutive( now ) ):
@@ -378,16 +368,17 @@ class moneyBot:
                     if ( not math.isnan( MAFast ) and not math.isnan( RSI ) and not self.tradingLocked ):
                         # Buy?
                         if (
-                                price < MAFast - ( MAFast * config[ 'buyBelowMA' ] ) and
                                 self.coinState[ ticker ].numBought == 0.0 and
+                                price < MAFast - ( MAFast * config[ 'buyBelowMA' ] ) and
                                 RSI <= config[ 'rsiOversold' ]
                             ):
                             self.buy( ticker, price )
 
                         # Sell?
                         if ( (
-                                price > self.coinState[ ticker ].purchasedPrice + ( self.coinState[ ticker ].purchasedPrice * config[ 'sellAboveBuyPrice' ] ) and
-                                self.coinState[ ticker ].numBought > 0.0
+                                self.coinState[ ticker ].numBought > 0.0 and
+                                price > self.coinState[ ticker ].purchasedPrice + ( self.coinState[ ticker ].purchasedPrice * config[ 'sellAboveBuyPrice' ] )
+                                
                             ) or 
                             # Stop-loss
                             (

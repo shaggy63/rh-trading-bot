@@ -12,5 +12,5 @@ config = {
     "minSecondsBetweenUpdates": 120,
     "maxSecondsBetweenUpdates": 300,
     "cashReserve": 0.0, # tell the bot if you don't want it to use all of your funds
-    "stopLoss": 0.2   # sell if the price drops at least 30% below the purchase price 
+    "stopLoss": 0.3   # sell if the price drops at least 30% below the purchase price 
 }
