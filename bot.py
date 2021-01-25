@@ -39,7 +39,7 @@ class moneyBot:
         'tickerList': [],
         'buyBelowMA': 0.0075,
         'sellAboveBuyPrice': 0.01,
-        'movingAveragePeriods': [ 20, 100, 12, 26, 9 ],
+        'movingAveragePeriods': [ 20, 100, 24, 70, 15 ],
         'rsiPeriod': 20,
         'rsiOversold': 39.5,
         'minSecondsBetweenUpdates': 120,
@@ -156,19 +156,6 @@ class moneyBot:
             quantity = random.randint( 5, 60 )
 
         return float( quantity )
-
-    def getCash( self ):
-        if ( not config[ 'debugEnabled' ] ):
-            try:
-                me = r.account.load_phoenix_account( info=None )
-                cash = float( me[ 'crypto_buying_power' ][ 'amount' ] )
-            except:
-                print( 'An exception occurred getting cash amount.' )
-                return -1.0
-        else:
-            cash = random.randint( 1000, 6000 ) + config[ 'cashReserve' ]
-
-        return cash - config[ 'cashReserve' ]
 
     def checkConsecutive( self, now ):
         if ( self.data.shape[ 0 ] <= 1 ):
@@ -310,13 +297,21 @@ class moneyBot:
                 self.nextMinute = futureTime.minute
 
                 # Refresh the cash amount available for trading
-                self.availableCash = self.getCash()
+                if ( not config[ 'debugEnabled' ] ):
+                    try:
+                        me = r.account.load_phoenix_account( info=None )
+                        self.availableCash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'cashReserve' ]
+                    except:
+                        print( 'An exception occurred getting cash amount.' )
+                        self.availableCash = -1.0
+                else:
+                    self.availableCash = random.randint( 1000, 5000 ) + config[ 'cashReserve' ]
 
                 # Print state
                 print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
                 print( self.data.tail() )
                 print( '-- Bot Status ---------------------------' )
-                print( '$' + str( self.getCash() ) + ' available for trading' )
+                print( '$' + str( self.availableCash ) + ' available for trading' )
                 print( 'Trading Locked: ' + str( self.tradingLocked ) )
                 print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
 
