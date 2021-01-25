@@ -28,7 +28,7 @@ class coin:
         self.quantity = 0.0
         self.order_id = ''
 
-class moneyBot:
+class bot:
     default_config = {
         'username': '',
         'password': '',
@@ -53,8 +53,8 @@ class moneyBot:
     min_consecutive_samples = 0
     
     available_cash = 0
-    nextMinute = 0
-    tradingLocked = False # used to determine if we have had a break in our incoming price data and hold buys if so
+    next_minute = 0
+    is_trading_locked = False # used to determine if we have had a break in our incoming price data and hold buys if so
 
     def __init__( self ):
         # Set Pandas to output all columns in the dataframe
@@ -109,7 +109,7 @@ class moneyBot:
         # Connect to RobinHood
         if ( not config[ 'debug_enabled' ] ):
             try:
-                rhResponse = r.login( config[ 'username' ], config[ 'password' ] )
+                rh_response = r.login( config[ 'username' ], config[ 'password' ] )
             except:
                 print( 'Got exception while attempting to log into RobinHood.' )
                 exit()
@@ -134,28 +134,10 @@ class moneyBot:
         print( '-- Bot Ready ----------------------------' )
 
         # Schedule the bot
-        self.nextMinute = datetime.now().minute
+        self.next_minute = datetime.now().minute
         return
 
-    def getHoldings( self, ticker ):
-        quantity = 0.0
-
-        if ( not config[ 'debug_enabled' ] ):
-            try:
-                result = r.get_crypto_positions()
-                for t in result:
-                    symbol = t[ 'currency' ][ 'code' ]
-                    if ( symbol == ticker ):
-                        quantity = t[ 'quantity' ]
-            except:
-                print( 'Got exception while getting holdings from RobinHood.' )
-                quantity = -1.0
-        else:
-            quantity = random.randint( 5, 60 )
-
-        return float( quantity )
-
-    def checkConsecutive( self, now ):
+    def is_consecutive( self, now ):
         if ( self.data.shape[ 0 ] <= 1 ):
             return False
         
@@ -178,27 +160,27 @@ class moneyBot:
 
         return True
 
-    def updateDataPoints( self, now ):
-        newRow = {}
+    def get_new_data( self, now ):
+        new_row = {}
 
-        self.tradingLocked = False
-        newRow[ 'timestamp' ] = now.strftime( "%Y-%m-%d %H:%M" )
+        self.is_trading_locked = False
+        new_row[ 'timestamp' ] = now.strftime( "%Y-%m-%d %H:%M" )
 
         # Calculate moving averages and RSI values
         for ticker in config[ 'ticker_list' ]:
             if ( not config[ 'debug_enabled' ] ):
                 try:
                     result = r.get_crypto_quote( ticker )
-                    newRow[ ticker ] = round( float( result[ 'mark_price' ] ), 3 )
+                    new_row[ ticker ] = round( float( result[ 'mark_price' ] ), 3 )
                 
                 except:
                     print( 'An exception occurred retrieving prices.' )
-                    self.tradingLocked = True
+                    self.is_trading_locked = True
                     return self.data
             else:
-                newRow[ ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
+                new_row[ ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
 
-            self.data = self.data.append( newRow, ignore_index = True )
+            self.data = self.data.append( new_row, ignore_index = True )
 
             if ( self.data.shape[ 0 ] > 0 ):
                 self.data[ ticker + '_SMA_F' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 0 ] ).mean()
@@ -208,7 +190,7 @@ class moneyBot:
 
         return self.data
 
-    def cancelOrder( self, order_id ):
+    def cancel_order( self, order_id ):
         print( 'Swing and miss, cancelling order ' + order_id )
         
         if ( not config[ 'debug_enabled' ] ):
@@ -271,17 +253,17 @@ class moneyBot:
 
         return
 
-    def runBot( self ):
+    def start( self ):
         while ( True ):
             now = datetime.now()
 
             # Is it time to spring into action?
-            if ( now.minute == self.nextMinute ):
-                self.data = self.updateDataPoints( now )
+            if ( now.minute == self.next_minute ):
+                self.data = self.get_new_data( now )
 
                 # Determine when to run next
                 futureTime = now + timedelta( 0, random.randint( config[ 'min_seconds_between_updates' ], config[ 'max_seconds_between_updates' ] - 1 ) )
-                self.nextMinute = futureTime.minute
+                self.next_minute = futureTime.minute
 
                 # Refresh the cash amount available for trading
                 if ( not config[ 'debug_enabled' ] ):
@@ -298,9 +280,9 @@ class moneyBot:
                 print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
                 print( self.data.tail() )
                 print( '-- Bot Status ---------------------------' )
-                print( 'Next Run (minute): ' + str( self.nextMinute ).zfill( 2 ) )
+                print( 'Next Run (minute): ' + str( self.next_minute ).zfill( 2 ) )
                 print( '$' + str( self.available_cash ) + ' available for trading' )
-                print( 'Trading Locked: ' + str( self.tradingLocked ) )
+                print( 'Trading Locked: ' + str( self.is_trading_locked ) )
                 
                 try:
                     open_orders = r.get_all_open_crypto_orders()
@@ -311,7 +293,7 @@ class moneyBot:
                 for ticker, coin_data in self.portfolio.items():
                     # Check if any of the open orders on Robinhood are ours (swing/miss)
                     for order in open_orders:
-                        if ( order[ 'id' ] == coin_data.order_id and self.cancelOrder( coin_data.order_id ) ):
+                        if ( order[ 'id' ] == coin_data.order_id and self.cancel_order( coin_data.order_id ) ):
                             print( 'Order #' + str( coin_data.order_id ) + ' was not filled. Cancelled.' )
                             self.available_cash += order[ 'price' ] * order[ 'quantity' ]
                             self.portfolio[ ticker ].price = 0.0
@@ -334,7 +316,7 @@ class moneyBot:
                 self.data.to_pickle( 'dataframe.pickle' )
 
                 # We don't have enough consecutive data points to decide what to do
-                if ( not self.checkConsecutive( now ) ):
+                if ( not self.is_consecutive( now ) ):
                     time.sleep( 30 )
                     continue
 
@@ -347,7 +329,7 @@ class moneyBot:
                     MACD = self.data.iloc[ -1 ][ ticker + '_MACD' ]
                     MACD_SIG = self.data.iloc[ -1 ][ ticker + '_MACD_S' ]
 
-                    if ( not math.isnan( MAFast ) and not math.isnan( RSI ) and not self.tradingLocked ):
+                    if ( not math.isnan( MAFast ) and not math.isnan( RSI ) and not self.is_trading_locked ):
                         # Buy?
                         if (
                                 self.portfolio[ ticker ].quantity == 0.0 and
@@ -374,8 +356,8 @@ class moneyBot:
         time.sleep( 30 )
 
 def main():
-    m = moneyBot()
-    m.runBot()
+    m = bot()
+    m.start()
 
 if __name__ == "__main__":
     main()
