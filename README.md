@@ -15,17 +15,17 @@ You'll need access to a working Python3 interpreter. For the sake of simplicity,
 
 Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your RobinHood username and password there. You can also customize the script's behavior through the other parameters:
 * (string) `username` and `password`: Your Robinhood credentials
-* (bool) `tradesEnabled`:  Run the bot in test mode and just collect data, or allow it to submit orders
-* (bool) `debugEnabled`: Simulate interactions with Robinhood (via random values)
-* (list) `tickerList`: List of coin tickers you want to trade (BTC, ETH, etc)
-* (float) `buyBelowMA`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
-* (float) `sellAboveBuyPrice`: Once the price rises above the Buy price by this percentage, it will try to sell
-* (int) `movingAveragePeriods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
-* (int) `rsiPeriod`: Length of the observation window for calculating the RSI
-* (float) `rsiOversold`: Threshold below which the bot will try to buy
-* (int) `minSecondsBetweenUpdates` and `maxSecondsBetweenUpdates`: This bot will pick a random wait time in between readings; use these values to define that range
-* (float) `cashReserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
-* (float) `stopLoss`: Threshold below which the bot will sell its holdings, regardless of any gains
+* (bool) `trades_enabled`:  Run the bot in test mode and just collect data, or allow it to submit orders
+* (bool) `debug_enabled`: Simulate interactions with Robinhood (via random values)
+* (list) `ticker_list`: List of coin tickers you want to trade (BTC, ETH, etc)
+* (float) `buy_below_moving_average`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
+* (float) `sell_above_buy_price`: Once the price rises above the Buy price by this percentage, it will try to sell
+* (int) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
+* (int) `rsi_period`: Length of the observation window for calculating the RSI
+* (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
+* (int) `min_seconds_between_updates` and `max_seconds_between_updates`: This bot will pick a random wait time in between readings; use these values to define that range
+* (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
+* (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
 
 ## Running the bot
 If you want to keep the bot running even when you're not logged into your server, I recommend using the [nohup](https://linuxize.com/post/linux-nohup-command/) command in Linux. It will save all the output in a file called `nohup.out`, where you can see what the bot is thinking. Information about the bot's state is also saved in three pickle files, so that if you stop and restart it, it will continue from where it left off:
