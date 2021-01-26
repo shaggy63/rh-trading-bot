@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 0.9.5
+# Version: 1.0
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -15,18 +15,19 @@ import random
 import robin_stocks as r
 import sys
 import talib
-import time
+import threading
 
-class coin:
-    price = 0.0
+class asset:
+    ticker = ''
     quantity = 0.0
+    price = 0.0
     order_id = ''
 
-    def __init__( self, name='' ):
-        print( 'Creating coin ' + name )
-        self.price = 0.0
-        self.quantity = 0.0
-        self.order_id = ''
+    def __init__( self, ticker = '', quantity = 0.0, price = 0.0, order_id = '' ):
+        self.ticker = ticker
+        self.quantity = quantity
+        self.price = price
+        self.order_id = order_id
 
 class bot:
     default_config = {
@@ -35,8 +36,13 @@ class bot:
         'trades_enabled': False,
         'debug_enabled': False,
         'ticker_list': [],
+        'trade_strategies': {
+            'buy': 'rsi_sma',
+            'sell': 'above_buy'
+        },
         'buy_below_moving_average': 0.0075,
         'sell_above_buy_price': 0.01,
+        'buy_amount_per_trade': 0,
         'moving_average_periods': [ 20, 100, 24, 70, 15 ],
         'rsi_period': 20,
         'rsi_buy_threshold': 39.5,
@@ -47,7 +53,7 @@ class bot:
     }
     data = pd.DataFrame()
     portfolio = {}
-    
+
     min_share_increments = {}  #the smallest increment of a coin you can buy/sell
     min_price_increments = {}   #the smallest fraction of a dollar you can buy/sell a coin with
     min_consecutive_samples = 0
@@ -76,11 +82,11 @@ class bot:
         else:
             self.min_consecutive_samples = config[ 'moving_average_periods' ][ 0 ]
         
-        for k, v in config.items():
-            if ( k == 'username' or k == 'password' ):
+        for a_key, a_value in config.items():
+            if ( a_key == 'username' or a_key == 'password' ):
                 continue
 
-            print( k.replace( '_', ' ' ).capitalize(), ': ', v, sep='' )
+            print( a_key.replace( '_', ' ' ).capitalize(), ': ', a_value, sep='' )
 
         print( '-- End Configuration --------------------' )
 
@@ -92,8 +98,6 @@ class bot:
         else:
             # Start from scratch
             print( 'No state saved, starting from scratch' )
-            for ticker in config[ 'ticker_list' ]:
-                self.portfolio[ ticker ] = coin( ticker )
 
         # Load data points
         if ( path.exists( 'dataframe.pickle' ) ):
@@ -101,8 +105,8 @@ class bot:
         else:
             column_names = [ 'timestamp' ]
 
-            for ticker in config[ 'ticker_list' ]:
-                column_names.append( ticker )
+            for a_ticker in config[ 'ticker_list' ]:
+                column_names.append( a_ticker )
 
             self.data = pd.DataFrame( columns = column_names )
 
@@ -115,10 +119,10 @@ class bot:
                 exit()
 
         # Download RobinHood parameters
-        for ticker in config[ 'ticker_list' ]:
+        for a_ticker in config[ 'ticker_list' ]:
             if ( not config[ 'debug_enabled' ] ):
                 try:
-                    result = r.get_crypto_info( ticker )
+                    result = r.get_crypto_info( a_ticker )
                     s_inc = result[ 'min_order_quantity_increment' ]
                     p_inc = result[ 'min_order_price_increment' ]
                 except:
@@ -128,19 +132,17 @@ class bot:
                 s_inc = 0.0001
                 p_inc = 0.0001
 
-            self.min_share_increments.update( { ticker: float( s_inc ) } )
-            self.min_price_increments.update( { ticker: float( p_inc ) } )
+            self.min_share_increments.update( { a_ticker: float( s_inc ) } )
+            self.min_price_increments.update( { a_ticker: float( p_inc ) } )
 
         print( '-- Bot Ready ----------------------------' )
 
-        # Schedule the bot
-        self.next_minute = datetime.now().minute
         return
 
-    def is_consecutive( self, now ):
+    def is_data_integrity( self, now ):
         if ( self.data.shape[ 0 ] <= 1 ):
             return False
-        
+
         # Check for break between now and last sample
         timediff = now - datetime.strptime( self.data.iloc[ -1 ][ 'timestamp' ], '%Y-%m-%d %H:%M' )
 
@@ -167,26 +169,26 @@ class bot:
         new_row[ 'timestamp' ] = now.strftime( "%Y-%m-%d %H:%M" )
 
         # Calculate moving averages and RSI values
-        for ticker in config[ 'ticker_list' ]:
+        for a_ticker in config[ 'ticker_list' ]:
             if ( not config[ 'debug_enabled' ] ):
                 try:
-                    result = r.get_crypto_quote( ticker )
-                    new_row[ ticker ] = round( float( result[ 'mark_price' ] ), 3 )
+                    result = r.get_crypto_quote( a_ticker )
+                    new_row[ a_ticker ] = round( float( result[ 'mark_price' ] ), 3 )
                 
                 except:
                     print( 'An exception occurred retrieving prices.' )
                     self.is_trading_locked = True
                     return self.data
             else:
-                new_row[ ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
+                new_row[ a_ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
 
             self.data = self.data.append( new_row, ignore_index = True )
 
             if ( self.data.shape[ 0 ] > 0 ):
-                self.data[ ticker + '_SMA_F' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 0 ] ).mean()
-                self.data[ ticker + '_SMA_S' ] = self.data[ ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 1 ] ).mean()
-                self.data[ ticker + '_RSI' ] = talib.RSI( self.data[ ticker ].values, timeperiod = config[ 'rsi_period' ] )
-                self.data[ ticker + '_MACD' ], self.data[ ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 2 ], slowperiod = config[ 'moving_average_periods' ][ 3 ], signalperiod = config[ 'moving_average_periods' ][ 4 ] )
+                self.data[ a_ticker + '_SMA_F' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 0 ] ).mean()
+                self.data[ a_ticker + '_SMA_S' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 1 ] ).mean()
+                self.data[ a_ticker + '_RSI' ] = talib.RSI( self.data[ a_ticker ].values, timeperiod = config[ 'rsi_period' ] )
+                self.data[ a_ticker + '_MACD' ], self.data[ a_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 2 ], slowperiod = config[ 'moving_average_periods' ][ 3 ], signalperiod = config[ 'moving_average_periods' ][ 4 ] )
 
         return self.data
 
@@ -202,162 +204,212 @@ class bot:
 
         return True
 
-    def sell( self, ticker, price ):
-        # Sell only what previously bought
-        availableCoin = self.portfolio[ ticker ].quantity
+    # The two methods here below (conditional_buy, conditional_sell) implement various trading strategies
+    def conditional_buy( self, ticker ):
+        if ( self.available_cash < config[ 'buy_amount_per_trade' ] or self.is_trading_locked ):
+            return False
 
-        if ( availableCoin > 0.0 ):
-            # Price needs to be specified to no more precision than listed in min_price_increments. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-            price = round( math.floor( price / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )  
-            profit = ( availableCoin * price ) - ( availableCoin * self.portfolio[ ticker ].price )
+        # MASlow = self.data.iloc[ -1 ][ ticker + '_SMA_S' ]
+        # MACD = self.data.iloc[ -1 ][ ticker + '_MACD' ]
+        # MACD_SIG = self.data.iloc[ -1 ][ ticker + '_MACD_S' ]
 
-            print( 'Selling ' + str( ticker ) + ' ' + str( availableCoin ) + ' for $' + str( price ) + ' (profit: $' + str( round( profit, 2 ) ) + ')' )
+        if (
+            ( 
+                # Simple RSI 
+                # Buy when price is below Fast-SMA and RSI is below threshold
+                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma' and
 
-            if ( config[ 'trades_enabled' ] ):
-                if ( not config[ 'debug_enabled' ] ):
-                    try:
-                        sell_info = r.order_sell_crypto_limit( str( ticker ), availableCoin, price )
-                    except:
-                        print( 'Got exception trying to sell, aborting.' )
-                        return
+                # Make sure the data is valid
+                not math.isnan( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
+                not math.isnan( self.data.iloc[ -1 ][ ticker + '_RSI' ] ) and
 
-                self.portfolio[ ticker ].price = 0.0
-                self.portfolio[ ticker ].quantity = 0.0
-                self.portfolio[ ticker ].order_id = sell_info[ 'id' ]
+                # Is the current price below the Fast-SMA by the percentage defined in the config file?
+                self.data.iloc[ -1 ][ ticker ] <= self.data.iloc[ -1 ][ ticker + '_SMA_F' ] - ( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] * config[ 'buy_below_moving_average' ] ) and
 
-        return
+                # RSI below the threshold
+                self.data.iloc[ -1 ][ ticker + '_RSI' ] <= config[ 'rsi_buy_threshold' ] 
+            )
+            or
+            (
+                # Fast-SMA and RSI - Credits: https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b
+                # Buy when price crosses down Fast-SMA, RSI is above 50
+                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma_50' and
+                
+                # Make sure the data is valid
+                not math.isnan( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
+                not math.isnan( self.data.iloc[ -2 ][ ticker + '_SMA_F' ] ) and
+                not math.isnan( self.data.iloc[ -1 ][ ticker + '_RSI' ] ) and
 
-    def buy( self, ticker, price ):
-        # If we are already in the process of a buy, don't submit another
-        if ( self.available_cash < 1 ):
-            print( 'Previous buy incomplete.' )
-            return
+                # Price crosses down Fast-SMA (i.e., it was greater than Fast-SMA before, and it went below in the last reading)
+                self.data.iloc[ -1 ][ ticker ] > self.data.iloc[ -2 ][ ticker + '_SMA_F' ]  and
+                self.data.iloc[ -1 ][ ticker ] <= self.data.iloc[ -1 ][ ticker + '_SMA_F' ] - ( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] * config[ 'buy_below_moving_average' ] ) and
+                
+                # RSI above 50
+                self.data.iloc[ -1 ][ ticker + '_RSI' ] > 50
+            )
+        ):
+            # Values need to be specified to no more precision than listed in min_price_increments.
+            # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
+            price = round( math.floor( self.data.iloc[ -1 ][ ticker ] / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
+            
+            # How much to buy depends on the configuration
+            quantity = ( self.available_cash if ( config[ 'buy_amount_per_trade' ] == 0 ) else config[ 'buy_amount_per_trade' ] ) / price
+            quantity = round( math.floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
+    
+            print( 'Buying ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price ) )
 
-        # Values need to be specified to no more precision than listed in min_price_increments. Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-        price = round( math.floor( price / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
-        quantity = ( self.available_cash - 0.25 ) / price
-        quantity = round( math.floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
-        print( 'Buying ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price ) )
-
-        if ( config[ 'trades_enabled' ] ):
-            if ( not config[ 'debug_enabled' ] ):
+            if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
                 try:
                     buy_info = r.order_buy_crypto_limit( str( ticker ), quantity, price )
                 except:
                     print( 'Got exception trying to buy, aborting.' )
-                    return
+                    return False
 
-            self.portfolio[ ticker ].price = price
-            self.portfolio[ ticker ].quantity = quantity
-            self.portfolio[ ticker ].order_id = buy_info[ 'id' ]
+            # Add this new asset to our portfolio
+            self.portfolio[ buy_info[ 'id' ] ] = asset( quantity, price, buy_info[ 'id' ] )
 
-        return
+            return True
+        return False
 
-    def start( self ):
-        while ( True ):
-            now = datetime.now()
+    def conditional_sell( self, asset ):
+        # Do we have enough of this asset to sell?
+        if ( asset.quantity <= 0.0 or self.is_trading_locked ):
+            return False
 
-            # Is it time to spring into action?
-            if ( now.minute == self.next_minute ):
-                self.data = self.get_new_data( now )
+        if (
+            (
+                # Simple percentage
+                config[ 'trade_strategies' ][ 'sell' ] == 'above_buy' and
 
-                # Determine when to run next
-                futureTime = now + timedelta( 0, random.randint( config[ 'min_seconds_between_updates' ], config[ 'max_seconds_between_updates' ] - 1 ) )
-                self.next_minute = futureTime.minute
+                # Is the current price above the purchase price by the percentage set in the config file?
+                self.data.iloc[ -1 ][ asset.ticker ] > asset.price + ( asset.price * config[ 'sell_above_buy_price' ] )
+            )
+            or
+            (
+                # Fast-SMA and RSI - Credits: https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b
+                # Sell when price crosses up Fast-SMA, RSI is below 60
+                config[ 'trade_strategies' ][ 'sell' ] == 'rsi_sma_60' and
 
-                # Refresh the cash amount available for trading
-                if ( not config[ 'debug_enabled' ] ):
-                    try:
-                        me = r.account.load_phoenix_account( info=None )
-                        self.available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
-                    except:
-                        print( 'An exception occurred while reading available cash amount.' )
-                        self.available_cash = -1.0
-                else:
-                    self.available_cash = random.randint( 1000, 5000 ) + config[ 'reserve' ]
+                # Make sure the data is valid
+                not math.isnan( self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] ) and
+                not math.isnan( self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] ) and
+                not math.isnan( self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] ) and
 
-                # Print state
-                print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
-                print( self.data.tail() )
-                print( '-- Bot Status ---------------------------' )
-                print( 'Next Run (minute): ' + str( self.next_minute ).zfill( 2 ) )
-                print( '$' + str( self.available_cash ) + ' available for trading' )
-                print( 'Trading Locked: ' + str( self.is_trading_locked ) )
+                # Price crosses up Fast-SMA (i.e., it was less than Fast-SMA before, and it went above in the last reading)
+                self.data.iloc[ -1 ][ asset.ticker ] < self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ]  and
+                self.data.iloc[ -1 ][ asset.ticker ] >= self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] + ( self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] * config[ 'sell_above_buy_price' ] ) and
                 
+                # RSI below 50
+                self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] < 60 and
+
+                # Price is greater than purchase price
+                self.data.iloc[ -1 ][ asset.ticker ] > asset.price
+            )
+            or 
+            (
+                # Stop-loss: is the current price below the purchase price by the percentage defined in the config file?
+                self.data.iloc[ -1 ][ asset.ticker ] < asset.price - ( asset.price * config[ 'stop_loss_threshold' ] )
+            )
+        ):   
+            # Values needs to be specified to no more precision than listed in min_price_increments. 
+            # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
+            price = round( math.floor( self.data.iloc[ -1 ][ ticker ] / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
+            profit = round( ( asset.quantity * price ) - ( asset.quantity * asset.price ), 3 )
+
+            print( 'Selling ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' for $' + str( price ) + ' (profit: $' + str( profit ) + ')' )
+
+            if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
                 try:
-                    open_orders = r.get_all_open_crypto_orders()
+                    sell_info = r.order_sell_crypto_limit( str( asset.ticker ), asset.quantity, price )
                 except:
-                    print( 'An exception occurred while retrieving list of open orders.' )
-                    open_orders = []
+                    print( 'Got exception trying to sell, aborting.' )
+                    return False
 
-                for ticker, coin_data in self.portfolio.items():
-                    # Check if any of the open orders on Robinhood are ours (swing/miss)
-                    for order in open_orders:
-                        if ( order[ 'id' ] == coin_data.order_id and self.cancel_order( coin_data.order_id ) ):
-                            print( 'Order #' + str( coin_data.order_id ) + ' was not filled. Cancelled.' )
-                            self.available_cash += order[ 'price' ] * order[ 'quantity' ]
-                            self.portfolio[ ticker ].price = 0.0
-                            self.portfolio[ ticker ].quantity = 0.0
-                            self.portfolio[ ticker ].order_id = ''
+            # Mark this asset as sold, the garbage collector (see 'run' method) will remove it from our portfolio at the next iteration
+            self.portfolio[ asset.order_id ].quantity = 0
 
-                    print( str( ticker ) + ': ' + str( coin_data.quantity ), end = '' )
+            return True
+        return False
+
+    def run( self ):
+        now = datetime.now()
+        self.data = self.get_new_data( now )
+
+        # Determine when to run next
+        next_run = random.randint( config[ 'min_seconds_between_updates' ], config[ 'max_seconds_between_updates' ] )
+        next_time = now + timedelta( 0, next_run )
+        threading.Timer( next_run, self.run ).start()
+
+        # Refresh the cash amount available for trading
+        if ( not config[ 'debug_enabled' ] ):
+            try:
+                me = r.account.load_phoenix_account( info=None )
+                self.available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
+            except:
+                print( 'An exception occurred while reading available cash amount.' )
+                self.available_cash = -1.0
+        else:
+            self.available_cash = random.randint( 1000, 5000 ) + config[ 'reserve' ]
+
+        # Print state
+        print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
+        print( self.data.tail() )
+        print( '-- Bot Status ---------------------------' )
+        print( 'Next Run (minute): ' + str( next_time.minute ).zfill( 2 ) )
+        print( '$' + str( self.available_cash ) + ' available for trading' )
+        print( 'Holding Trades: ' + str( self.is_trading_locked ) )
+
+        # We don't have enough consecutive data points to decide what to do
+        if ( not self.is_data_integrity( now ) ):
+            return
+
+        if ( len( self.portfolio ) > 0 ):
+            # Do we have any open orders on the platform? (swing/miss)
+            try:
+                open_orders = r.get_all_open_crypto_orders()
+            except:
+                print( 'An exception occurred while retrieving list of open orders.' )
+                open_orders = []
+
+            print( '-- Portfolio ----------------------------' )
+
+            for a_asset in list( self.portfolio.values() ):
+                # Check if any of these open orders on Robinhood are ours
+                is_asset_deleted = False
+                for a_order in open_orders:
+                    if ( a_order[ 'id' ] == a_asset.order_id and self.cancel_order( a_order[ 'id' ] ) ):
+                        print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from portfolio.' )
+                        
+                        # If this was a buy order, update the amount of available cash freed by the cancelled transaction
+                        if ( a_order[ 'side' ] == 'buy' ):
+                            self.available_cash += a_order[ 'price' ] * a_order[ 'quantity' ]
+
+                        self.portfolio.pop( a_asset.order_id )
+                        is_asset_deleted = True
+
+                if ( not is_asset_deleted ):
+                    # Print a summary of all our assets
+                    print( str( a_asset.ticker ) + ': ' + str( a_asset.quantity ), end = '' )
             
-                    if ( coin_data.quantity > 0.0 ):
-                        cost = coin_data.quantity * coin_data.price
-                        sell_at = round( cost + ( cost * config[ 'sell_above_buy_price' ] ), 3 )
-                        print( ' | Cost: $' + str( round( cost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ ticker ] * coin_data.quantity, 3 ) ) + ' | Selling at $' + str( sell_at ) )
+                    if ( a_asset.quantity > 0.0 ):
+                        cost = a_asset.quantity * a_asset.price
+                        print( ' | Cost: $' + str( round( cost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) )
                     else:
                         print( "\n" )
 
-                # Save state
-                with open( 'portfolio.pickle', 'wb' ) as f:
-                    pickle.dump( self.portfolio, f )
+                    # Is it time to sell any of them?
+                    self.conditional_sell( a_asset )
 
-                self.data.to_pickle( 'dataframe.pickle' )
+        # Buy?
+        for a_ticker in config[ 'ticker_list' ]:
+            self.conditional_buy( a_ticker )
 
-                # We don't have enough consecutive data points to decide what to do
-                if ( not self.is_consecutive( now ) ):
-                    time.sleep( 30 )
-                    continue
+        # Save state
+        with open( 'portfolio.pickle', 'wb' ) as f:
+            pickle.dump( self.portfolio, f )
 
-                for ticker in config[ 'ticker_list' ]:
-                    # Look at values in last row
-                    price = self.data.iloc[ -1 ][ ticker ]
-                    MAFast = self.data.iloc[ -1 ][ ticker + '_SMA_F' ]
-                    MASlow = self.data.iloc[ -1 ][ ticker + '_SMA_S' ]
-                    RSI = self.data.iloc[ -1 ][ ticker + '_RSI' ]
-                    MACD = self.data.iloc[ -1 ][ ticker + '_MACD' ]
-                    MACD_SIG = self.data.iloc[ -1 ][ ticker + '_MACD_S' ]
-
-                    if ( not math.isnan( MAFast ) and not math.isnan( RSI ) and not self.is_trading_locked ):
-                        # Buy?
-                        if (
-                                self.portfolio[ ticker ].quantity == 0.0 and
-                                price < MAFast - ( MAFast * config[ 'buy_below_moving_average' ] ) and
-                                RSI <= config[ 'rsi_buy_threshold' ]
-                            ):
-                            self.buy( ticker, price )
-
-                        # Sell?
-                        if ( (
-                                self.portfolio[ ticker ].quantity > 0.0 and
-                                price > self.portfolio[ ticker ].price + ( self.portfolio[ ticker ].price * config[ 'sell_above_buy_price' ] )
-                                
-                            ) or 
-                            # Stop-loss
-                            (
-                                price < self.portfolio[ ticker ].price - ( self.portfolio[ ticker ].price * config[ 'stop_loss_threshold' ] )
-                            ) ):
-                            self.sell( ticker, price )
-
-                # Take a break, you deserve it
-                time.sleep( 60 )
-
-        time.sleep( 30 )
-
-def main():
-    m = bot()
-    m.start()
+        self.data.to_pickle( 'dataframe.pickle' )
 
 if __name__ == "__main__":
-    main()
+    b = bot()
+    b.run()
