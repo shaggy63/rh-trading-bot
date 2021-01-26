@@ -1,4 +1,4 @@
-# RobinHood Crypto Trading Bot
+# Robinhood Crypto Trading Bot
 A simple Python crypto algotrader 
 
 ## Introduction
@@ -13,13 +13,15 @@ You'll need access to a working Python3 interpreter. For the sake of simplicity,
 * [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): `pip3 install pandas`
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
-Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your RobinHood username and password there. You can also customize the script's behavior through the other parameters:
-* (string) `username` and `password`: Your Robinhood credentials
-* (bool) `trades_enabled`:  Run the bot in test mode and just collect data, or allow it to submit orders
+Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your Robinhood username and password there. You can also customize the script's behavior through the other parameters:
+* (string) `username` and `password`: Robinhood credentials
+* (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `debug_enabled`: Simulate interactions with Robinhood (via random values)
 * (list) `ticker_list`: List of coin tickers you want to trade (BTC, ETH, etc)
+* (dict) `trade_strategies`: Select which strategies would you like the bot to use (buy, sell)
 * (float) `buy_below_moving_average`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
 * (float) `sell_above_buy_price`: Once the price rises above the Buy price by this percentage, it will try to sell
+* (float) `buy_amount_per_trade`: If greater than zero, buy this amount of coin, otherwise use all the cash in the account
 * (int) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
 * (int) `rsi_period`: Length of the observation window for calculating the RSI
 * (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
@@ -36,7 +38,7 @@ The overall flow looks like this:
 * Initialize or load a previously saved state
 * Load the configuration
 * Determine when to run next
-* If it's time to spring into action, download the current price data from RobinHood
+* If it's time to spring into action, download the current price data from Robinhood
 * Compute [moving average](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
 * Append this information to a pickle data file
 * Check if the conditions to buy or sell are met
