@@ -41,7 +41,7 @@ class bot:
             'sell': 'above_buy'
         },
         'buy_below_moving_average': 0.0075,
-        'sell_above_buy_price': 0.01,
+        'profit_percentage': 0.01,
         'buy_amount_per_trade': 0,
         'moving_average_periods': {
             'sma_fast': 40,
@@ -288,7 +288,7 @@ class bot:
                 config[ 'trade_strategies' ][ 'sell' ] == 'above_buy' and
 
                 # Is the current price above the purchase price by the percentage set in the config file?
-                self.data.iloc[ -1 ][ asset.ticker ] > asset.price + ( asset.price * config[ 'sell_above_buy_price' ] )
+                self.data.iloc[ -1 ][ asset.ticker ] > asset.price + ( asset.price * config[ 'profit_percentage' ] )
             )
             or
             (
@@ -302,14 +302,14 @@ class bot:
                 not math.isnan( self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] ) and
 
                 # Price crosses up Fast-SMA (i.e., it was less than Fast-SMA before, and it went above in the last reading)
-                self.data.iloc[ -1 ][ asset.ticker ] < self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ]  and
-                self.data.iloc[ -1 ][ asset.ticker ] >= self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] + ( self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] * config[ 'sell_above_buy_price' ] ) and
+                self.data.iloc[ -1 ][ asset.ticker ] < self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] and
+                self.data.iloc[ -1 ][ asset.ticker ] >= self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] and
                 
-                # RSI below 50
+                # RSI below 60
                 self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] < 60 and
 
-                # Price is greater than purchase price
-                self.data.iloc[ -1 ][ asset.ticker ] > asset.price
+                # Price is greater than purchase price by at least profit percentage
+                self.data.iloc[ -1 ][ asset.ticker ] >= asset.price + (  asset.price * config[ 'profit_percentage' ] )
             )
             or 
             (
