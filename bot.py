@@ -25,8 +25,8 @@ class asset:
 
     def __init__( self, ticker = '', quantity = 0.0, price = 0.0, order_id = '' ):
         self.ticker = ticker
-        self.quantity = quantity
-        self.price = price
+        self.quantity = float( quantity )
+        self.price = float( price )
         self.order_id = order_id
 
 class bot:
@@ -43,7 +43,13 @@ class bot:
         'buy_below_moving_average': 0.0075,
         'sell_above_buy_price': 0.01,
         'buy_amount_per_trade': 0,
-        'moving_average_periods': [ 20, 100, 24, 70, 15 ],
+        'moving_average_periods': {
+            'sma_fast': 40,
+            'sma_slow': 200,
+            'macd_fast': 40,
+            'macd_slow': 120,
+            'macd_signal': 25
+        },
         'rsi_period': 20,
         'rsi_buy_threshold': 39.5,
         'min_seconds_between_updates': 120,
@@ -77,10 +83,10 @@ class bot:
             print( 'RobinHood credentials not found in config file. Aborting.' )
             exit()
 
-        if ( config[ 'rsi_period' ] > config[ 'moving_average_periods' ][ 0 ] ):
+        if ( config[ 'rsi_period' ] > config[ 'moving_average_periods' ][ 'sma_fast' ] ):
             self.min_consecutive_samples = config[ 'rsi_period' ]
         else:
-            self.min_consecutive_samples = config[ 'moving_average_periods' ][ 0 ]
+            self.min_consecutive_samples = config[ 'moving_average_periods' ][ 'sma_fast' ]
         
         for a_key, a_value in config.items():
             if ( a_key == 'username' or a_key == 'password' ):
@@ -157,7 +163,7 @@ class bot:
                 timediff = datetime.strptime( self.data.iloc[ position - x ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) - datetime.strptime( self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) 
 
                 if ( timediff.seconds > config[ 'max_seconds_between_updates' ] * 2 ):
-                    print( 'Interruption found in price data, holding buys until sufficient samples are collected.' )
+                    print( 'Holding trades: interruption found in price data.' )
                     return False
 
         return True
@@ -185,10 +191,10 @@ class bot:
             self.data = self.data.append( new_row, ignore_index = True )
 
             if ( self.data.shape[ 0 ] > 0 ):
-                self.data[ a_ticker + '_SMA_F' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 0 ] ).mean()
-                self.data[ a_ticker + '_SMA_S' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 1 ] ).mean()
+                self.data[ a_ticker + '_SMA_F' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
+                self.data[ a_ticker + '_SMA_S' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
                 self.data[ a_ticker + '_RSI' ] = talib.RSI( self.data[ a_ticker ].values, timeperiod = config[ 'rsi_period' ] )
-                self.data[ a_ticker + '_MACD' ], self.data[ a_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 2 ], slowperiod = config[ 'moving_average_periods' ][ 3 ], signalperiod = config[ 'moving_average_periods' ][ 4 ] )
+                self.data[ a_ticker + '_MACD' ], self.data[ a_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
 
         return self.data
 
@@ -213,9 +219,12 @@ class bot:
         # MACD = self.data.iloc[ -1 ][ ticker + '_MACD' ]
         # MACD_SIG = self.data.iloc[ -1 ][ ticker + '_MACD_S' ]
 
+        # faster MA over slower MA in an uptrend, slower MA over faster MA in a downtrend
+        # https://www.babypips.com/learn/forex/moving-average-crossover-trading
+
         if (
             ( 
-                # Simple RSI 
+                # Simple Fast-SMA and RSI 
                 # Buy when price is below Fast-SMA and RSI is below threshold
                 config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma' and
 
@@ -266,7 +275,7 @@ class bot:
                     return False
 
             # Add this new asset to our portfolio
-            self.portfolio[ buy_info[ 'id' ] ] = asset( quantity, price, buy_info[ 'id' ] )
+            self.portfolio[ buy_info[ 'id' ] ] = asset( ticker, quantity, price, buy_info[ 'id' ] )
 
             return True
         return False
@@ -355,13 +364,11 @@ class bot:
         print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
         print( self.data.tail() )
         print( '-- Bot Status ---------------------------' )
-        print( 'Next Run (minute): ' + str( next_time.minute ).zfill( 2 ) )
-        print( '$' + str( self.available_cash ) + ' available for trading' )
-        print( 'Holding Trades: ' + str( self.is_trading_locked ) )
+        print( 'Next run (minute): ' + str( next_time.minute ).zfill( 2 ) )
+        print( 'Buying power available: $' + str( self.available_cash ) )
 
         # We don't have enough consecutive data points to decide what to do
-        if ( not self.is_data_integrity( now ) ):
-            return
+        self.is_trading_locked = not self.is_data_integrity( now )
 
         if ( len( self.portfolio ) > 0 ):
             # Do we have any open orders on the platform? (swing/miss)
@@ -393,7 +400,7 @@ class bot:
             
                     if ( a_asset.quantity > 0.0 ):
                         cost = a_asset.quantity * a_asset.price
-                        print( ' | Cost: $' + str( round( cost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) )
+                        print( ' | Price: $' + str( round( a_asset.price, 3 ) ) + ' | Cost: $' + str( round( cost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) )
                     else:
                         print( "\n" )
 
