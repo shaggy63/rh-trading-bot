@@ -58,7 +58,7 @@ class bot:
         'stop_loss_threshold': 0.2
     }
     data = pd.DataFrame()
-    portfolio = {}
+    orders = {}
 
     min_share_increments = {}  #the smallest increment of a coin you can buy/sell
     min_price_increments = {}   #the smallest fraction of a dollar you can buy/sell a coin with
@@ -96,11 +96,11 @@ class bot:
 
         print( '-- End Configuration --------------------' )
 
-        if path.exists( 'portfolio.pickle' ):
+        if path.exists( 'orders.pickle' ):
             # Load state
             print( 'Loading previously saved state' )
-            with open( 'portfolio.pickle', 'rb' ) as f:
-                self.portfolio = pickle.load( f )
+            with open( 'orders.pickle', 'rb' ) as f:
+                self.orders = pickle.load( f )
         else:
             # Start from scratch
             print( 'No state saved, starting from scratch' )
@@ -199,8 +199,6 @@ class bot:
         return self.data
 
     def cancel_order( self, order_id ):
-        print( 'Swing and miss, cancelling order ' + order_id )
-        
         if ( not config[ 'debug_enabled' ] ):
             try:
                 cancelResult = r.cancel_crypto_order( order_id )
@@ -270,12 +268,12 @@ class bot:
             if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
                 try:
                     buy_info = r.order_buy_crypto_limit( str( ticker ), quantity, price )
+
+                    # Add this new asset to our orders
+                    self.orders[ buy_info[ 'id' ] ] = asset( ticker, quantity, price, buy_info[ 'id' ] )
                 except:
                     print( 'Got exception trying to buy, aborting.' )
                     return False
-
-            # Add this new asset to our portfolio
-            self.portfolio[ buy_info[ 'id' ] ] = asset( ticker, quantity, price, buy_info[ 'id' ] )
 
             return True
         return False
@@ -330,12 +328,12 @@ class bot:
             if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
                 try:
                     sell_info = r.order_sell_crypto_limit( str( asset.ticker ), asset.quantity, price )
+
+                    # Mark this asset as sold, the garbage collector (see 'run' method) will remove it from our orders at the next iteration
+                    self.orders[ asset.order_id ].quantity = 0
                 except:
                     print( 'Got exception trying to sell, aborting.' )
                     return False
-
-            # Mark this asset as sold, the garbage collector (see 'run' method) will remove it from our portfolio at the next iteration
-            self.portfolio[ asset.order_id ].quantity = 0
 
             return True
         return False
@@ -370,7 +368,7 @@ class bot:
         # We don't have enough consecutive data points to decide what to do
         self.is_trading_locked = not self.is_data_integrity( now )
 
-        if ( len( self.portfolio ) > 0 ):
+        if ( len( self.orders ) > 0 ):
             # Do we have any open orders on the platform? (swing/miss)
             try:
                 open_orders = r.get_all_open_crypto_orders()
@@ -378,20 +376,20 @@ class bot:
                 print( 'An exception occurred while retrieving list of open orders.' )
                 open_orders = []
 
-            print( '-- Portfolio ----------------------------' )
+            print( '-- Orders -------------------------------' )
 
-            for a_asset in list( self.portfolio.values() ):
+            for a_asset in list( self.orders.values() ):
                 # Check if any of these open orders on Robinhood are ours
                 is_asset_deleted = False
                 for a_order in open_orders:
                     if ( a_order[ 'id' ] == a_asset.order_id and self.cancel_order( a_order[ 'id' ] ) ):
-                        print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from portfolio.' )
+                        print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from orders.' )
                         
                         # If this was a buy order, update the amount of available cash freed by the cancelled transaction
                         if ( a_order[ 'side' ] == 'buy' ):
-                            self.available_cash += a_order[ 'price' ] * a_order[ 'quantity' ]
+                            self.available_cash += a_asset.price * a_asset.quantity
 
-                        self.portfolio.pop( a_asset.order_id )
+                        self.orders.pop( a_asset.order_id )
                         is_asset_deleted = True
 
                 if ( not is_asset_deleted ):
@@ -412,8 +410,8 @@ class bot:
             self.conditional_buy( a_ticker )
 
         # Save state
-        with open( 'portfolio.pickle', 'wb' ) as f:
-            pickle.dump( self.portfolio, f )
+        with open( 'orders.pickle', 'wb' ) as f:
+            pickle.dump( self.orders, f )
 
         self.data.to_pickle( 'dataframe.pickle' )
 
