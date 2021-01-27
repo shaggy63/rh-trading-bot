@@ -20,8 +20,9 @@ config = {
     },
     'rsi_period': 20, # data points for RSI
     'rsi_buy_threshold': 39.5, # threshold to trigger a buy
+    'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
+    'stop_loss_threshold': 0.3,   # sell if the price drops at least 30% below the purchase price
     'min_seconds_between_updates': 120,
     'max_seconds_between_updates': 300,
-    'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
-    'stop_loss_threshold': 0.3   # sell if the price drops at least 30% below the purchase price 
+    'max_data_rows': 10000
 }

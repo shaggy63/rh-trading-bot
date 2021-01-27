@@ -52,10 +52,11 @@ class bot:
         },
         'rsi_period': 20,
         'rsi_buy_threshold': 39.5,
+        'reserve': 0.0,
+        'stop_loss_threshold': 0.2,
         'min_seconds_between_updates': 120,
         'min_seconds_between_updates': 300,
-        'reserve': 0.0,
-        'stop_loss_threshold': 0.2
+        'max_data_rows': 10000
     }
     data = pd.DataFrame()
     orders = {}
@@ -107,6 +108,9 @@ class bot:
         # Load data points
         if ( path.exists( 'dataframe.pickle' ) ):
             self.data = pd.read_pickle( 'dataframe.pickle' )
+            
+            # Only track up to a fixed amount of data points
+            self.data = self.data.tail( config[ 'max_data_rows' ] - 1 )
         else:
             column_names = [ 'timestamp' ]
 
@@ -140,11 +144,14 @@ class bot:
             self.min_share_increments.update( { a_ticker: float( s_inc ) } )
             self.min_price_increments.update( { a_ticker: float( p_inc ) } )
 
+        # Initialize the available_cash amount
+        self.available_cash = self.get_available_cash()
+
         print( '-- Bot Ready ----------------------------' )
 
         return
 
-    def is_data_integrity( self, now ):
+    def is_data_consistent( self, now ):
         if ( self.data.shape[ 0 ] <= 1 ):
             return False
 
@@ -196,6 +203,21 @@ class bot:
                 self.data[ a_ticker + '_MACD' ], self.data[ a_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
 
         return self.data
+
+    def get_available_cash( self ):
+        available_cash = 0
+        
+        if ( not config[ 'debug_enabled' ] ):
+            try:
+                me = r.account.load_phoenix_account( info=None )
+                available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
+            except:
+                print( 'An exception occurred while reading available cash amount.' )
+                available_cash = -1.0
+        else:
+            self.available_cash = random.randint( 1000, 5000 ) + config[ 'reserve' ]
+
+        return available_cash
 
     def cancel_order( self, order_id ):
         if ( not config[ 'debug_enabled' ] ):
@@ -349,26 +371,12 @@ class bot:
         # Whenever we add a new order to our log, we check to see if it was a swing/miss
         is_new_order_added = False
 
-        # Refresh the cash amount available for trading
-        if ( not config[ 'debug_enabled' ] ):
-            try:
-                me = r.account.load_phoenix_account( info=None )
-                self.available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
-            except:
-                print( 'An exception occurred while reading available cash amount.' )
-                self.available_cash = -1.0
-        else:
-            self.available_cash = random.randint( 1000, 5000 ) + config[ 'reserve' ]
-
         # Print state
         print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
         print( self.data.tail() )
-        print( '-- Bot Status ---------------------------' )
-        print( 'Next run (minute): ' + str( next_time.minute ).zfill( 2 ) )
-        print( 'Buying power available: $' + str( self.available_cash ) )
 
         # We don't have enough consecutive data points to decide what to do
-        self.is_trading_locked = not self.is_data_integrity( now )
+        self.is_trading_locked = not self.is_data_consistent( now )
 
         if ( len( self.orders ) > 0 ):
             print( '-- Orders -------------------------------' )
@@ -384,16 +392,16 @@ class bot:
                     except:
                         print( 'An exception occurred while retrieving list of open orders.' )
                         open_orders = []
+
                     for a_order in open_orders:
                         if ( a_order[ 'id' ] == a_asset.order_id and self.cancel_order( a_order[ 'id' ] ) ):
                             print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from orders.' )
-                            
-                            # If this was a buy order, update the amount of available cash freed by the cancelled transaction
-                            if ( a_order[ 'side' ] == 'buy' ):
-                                self.available_cash += a_asset.price * a_asset.quantity
 
                             self.orders.pop( a_asset.order_id )
                             is_asset_deleted = True
+
+                    # Refresh the cash amount available for trading
+                    self.available_cash = self.get_available_cash()
 
                 if ( not is_asset_deleted ):
                     # Print a summary of all our assets
@@ -411,6 +419,11 @@ class bot:
         # Buy?
         for a_ticker in config[ 'ticker_list' ]:
             is_new_order_added = self.conditional_buy( a_ticker ) or is_new_order_added
+
+        # Final status for this iteration
+        print( '-- Bot Status ---------------------------' )
+        print( 'Next run (minute): ' + str( next_time.minute ).zfill( 2 ) )
+        print( 'Buying power available: $' + str( self.available_cash ) )
 
         # Save state
         with open( 'orders.pickle', 'wb' ) as f:
