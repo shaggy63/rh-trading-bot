@@ -65,7 +65,6 @@ class bot:
     min_consecutive_samples = 0
     
     available_cash = 0
-    next_minute = 0
     is_trading_locked = False # used to determine if we have had a break in our incoming price data and hold buys if so
 
     def __init__( self ):
@@ -347,6 +346,9 @@ class bot:
         next_time = now + timedelta( 0, next_run )
         threading.Timer( next_run, self.run ).start()
 
+        # Whenever we add a new order to our log, we check to see if it was a swing/miss
+        is_new_order_added = False
+
         # Refresh the cash amount available for trading
         if ( not config[ 'debug_enabled' ] ):
             try:
@@ -369,28 +371,29 @@ class bot:
         self.is_trading_locked = not self.is_data_integrity( now )
 
         if ( len( self.orders ) > 0 ):
-            # Do we have any open orders on the platform? (swing/miss)
-            try:
-                open_orders = r.get_all_open_crypto_orders()
-            except:
-                print( 'An exception occurred while retrieving list of open orders.' )
-                open_orders = []
-
             print( '-- Orders -------------------------------' )
 
             for a_asset in list( self.orders.values() ):
                 # Check if any of these open orders on Robinhood are ours
                 is_asset_deleted = False
-                for a_order in open_orders:
-                    if ( a_order[ 'id' ] == a_asset.order_id and self.cancel_order( a_order[ 'id' ] ) ):
-                        print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from orders.' )
-                        
-                        # If this was a buy order, update the amount of available cash freed by the cancelled transaction
-                        if ( a_order[ 'side' ] == 'buy' ):
-                            self.available_cash += a_asset.price * a_asset.quantity
 
-                        self.orders.pop( a_asset.order_id )
-                        is_asset_deleted = True
+                # Do we have any open orders on the platform? (swing/miss)
+                if ( is_new_order_added ):
+                    try:
+                        open_orders = r.get_all_open_crypto_orders()
+                    except:
+                        print( 'An exception occurred while retrieving list of open orders.' )
+                        open_orders = []
+                    for a_order in open_orders:
+                        if ( a_order[ 'id' ] == a_asset.order_id and self.cancel_order( a_order[ 'id' ] ) ):
+                            print( 'Order #' + str( a_order[ 'id' ] ) + ' (' + a_order[ 'side' ] + ' ' + a_asset.ticker + ') was not filled. Cancelled and removed from orders.' )
+                            
+                            # If this was a buy order, update the amount of available cash freed by the cancelled transaction
+                            if ( a_order[ 'side' ] == 'buy' ):
+                                self.available_cash += a_asset.price * a_asset.quantity
+
+                            self.orders.pop( a_asset.order_id )
+                            is_asset_deleted = True
 
                 if ( not is_asset_deleted ):
                     # Print a summary of all our assets
@@ -403,11 +406,11 @@ class bot:
                         print( "\n" )
 
                     # Is it time to sell any of them?
-                    self.conditional_sell( a_asset )
+                    is_new_order_added = self.conditional_sell( a_asset ) or is_new_order_added
 
         # Buy?
         for a_ticker in config[ 'ticker_list' ]:
-            self.conditional_buy( a_ticker )
+            is_new_order_added = self.conditional_buy( a_ticker ) or is_new_order_added
 
         # Save state
         with open( 'orders.pickle', 'wb' ) as f:
