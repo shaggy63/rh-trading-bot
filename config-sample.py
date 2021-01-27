@@ -11,12 +11,12 @@ config = {
     'buy_below_moving_average': 0.0075, # buy if price drops below Fast_MA by this percentage (0.75%)
     'profit_percentage': 0.01, # sell if price raises above purchase price by this percentage (1%)
     'buy_amount_per_trade': 0, # if greater than zero, buy this amount of coin, otherwise use all the cash in the account
-    'moving_average_periods': { # data points to calculate SMA fast, SMA slow, MACD fast, MACD slow, MACD signal
-        'sma_fast': 40,
-        'sma_slow': 200,
-        'macd_fast': 40,
-        'macd_slow': 120,
-        'macd_signal': 25
+    'moving_average_periods': { # data points needed to calculate SMA fast, SMA slow, MACD fast, MACD slow, MACD signal
+        'sma_fast': 80, # the bot collects 25 readings per hour on average (based on the default random scheduling)
+        'sma_slow': 400,
+        'macd_fast': 80,
+        'macd_slow': 240,
+        'macd_signal': 50
     },
     'rsi_period': 20, # data points for RSI
     'rsi_buy_threshold': 39.5, # threshold to trigger a buy
