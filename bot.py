@@ -67,6 +67,7 @@ class bot:
     
     available_cash = 0
     is_trading_locked = False # used to determine if we have had a break in our incoming price data and hold buys if so
+    is_new_order_added = False # the bot performs certain cleanup operations after new orders are sent out
 
     def __init__( self ):
         # Set Pandas to output all columns in the dataframe
@@ -205,7 +206,7 @@ class bot:
         return self.data
 
     def get_available_cash( self ):
-        available_cash = 0
+        available_cash = -1.0
         
         if ( not config[ 'debug_enabled' ] ):
             try:
@@ -213,7 +214,6 @@ class bot:
                 available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
             except:
                 print( 'An exception occurred while reading available cash amount.' )
-                available_cash = -1.0
         else:
             self.available_cash = random.randint( 1000, 5000 ) + config[ 'reserve' ]
 
@@ -368,15 +368,16 @@ class bot:
         next_time = now + timedelta( 0, next_run )
         threading.Timer( next_run, self.run ).start()
 
-        # Whenever we add a new order to our log, we check to see if it was a swing/miss
-        is_new_order_added = False
-
         # Print state
         print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
         print( self.data.tail() )
 
         # We don't have enough consecutive data points to decide what to do
         self.is_trading_locked = not self.is_data_consistent( now )
+
+        # Let's make sure we have the correct cash amount available for trading
+        if ( self.is_new_order_added or self.available_cash < 0 ):
+            self.available_cash = self.get_available_cash()
 
         if ( len( self.orders ) > 0 ):
             print( '-- Orders -------------------------------' )
@@ -385,8 +386,8 @@ class bot:
                 # Check if any of these open orders on Robinhood are ours
                 is_asset_deleted = False
 
-                # Do we have any open orders on the platform? (swing/miss)
-                if ( is_new_order_added ):
+                # Do we have any orders not filled on the platform? (swing/miss)
+                if ( self.is_new_order_added ):
                     try:
                         open_orders = r.get_all_open_crypto_orders()
                     except:
@@ -400,8 +401,8 @@ class bot:
                             self.orders.pop( a_asset.order_id )
                             is_asset_deleted = True
 
-                    # Refresh the cash amount available for trading
-                    self.available_cash = self.get_available_cash()
+                    # We're done processing new orders
+                    self.is_new_order_added = False
 
                 if ( not is_asset_deleted ):
                     # Print a summary of all our assets
@@ -417,11 +418,11 @@ class bot:
                         print( "\n" )
 
                     # Is it time to sell any of them?
-                    is_new_order_added = self.conditional_sell( a_asset ) or is_new_order_added
+                    self.is_new_order_added = self.conditional_sell( a_asset ) or self.is_new_order_added
 
         # Buy?
         for a_ticker in config[ 'ticker_list' ]:
-            is_new_order_added = self.conditional_buy( a_ticker ) or is_new_order_added
+            self.is_new_order_added = self.conditional_buy( a_ticker ) or self.is_new_order_added
 
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
