@@ -25,9 +25,10 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (dict) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
 * (int) `rsi_period`: Length of the observation window for calculating the RSI
 * (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
-* (int) `min_seconds_between_updates` and `max_seconds_between_updates`: This bot will pick a random wait time in between readings; use these values to define that range
 * (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
+* (int) `min_seconds_between_updates` and `max_seconds_between_updates`: This bot will pick a random wait time in between readings; use these values to define that range
+* (int) `max_data_rows`: Max number of data points to store in the Pickle file (if you have issues with memory limits on your machine). 1k rows = 70kB
 
 ## Running the bot
 If you want to keep the bot running even when you're not logged into your server, I recommend using the [nohup](https://linuxize.com/post/linux-nohup-command/) command in Linux. It will save all the output in a file called `nohup.out`, where you can see what the bot is thinking. Information about the bot's state is also saved in three pickle files, so that if you stop and restart it, it will continue from where it left off:
