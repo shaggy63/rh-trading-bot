@@ -22,7 +22,7 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `buy_below_moving_average`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
 * (float) `sell_above_buy_price`: Once the price rises above the Buy price by this percentage, it will try to sell
 * (float) `buy_amount_per_trade`: If greater than zero, buy this amount of coin, otherwise use all the cash in the account
-* (int) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
+* (dict) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
 * (int) `rsi_period`: Length of the observation window for calculating the RSI
 * (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
 * (int) `min_seconds_between_updates` and `max_seconds_between_updates`: This bot will pick a random wait time in between readings; use these values to define that range
