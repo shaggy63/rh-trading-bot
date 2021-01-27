@@ -411,6 +411,9 @@ class bot:
                         cost = a_asset.quantity * a_asset.price
                         print( ' | Price: $' + str( round( a_asset.price, 3 ) ) + ' | Cost: $' + str( round( cost, 3 ) ) + ' | Current value: $' + str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) )
                     else:
+                        # We sold this asset during the previous iteration, and it wasn't still pending here above
+                        # We can remove it from our orders safely (garbage collector)
+                        self.orders.pop( a_asset.order_id )
                         print( "\n" )
 
                     # Is it time to sell any of them?
