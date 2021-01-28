@@ -1,5 +1,5 @@
 from config import config
-import math
+from math import isnan
 
 # Signals are defined in alphabetical order
 class signals:
@@ -10,15 +10,15 @@ class signals:
 
         return(        
             # Make sure the data is valid
-            not math.isnan( data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -2 ][ ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -3 ][ ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -4 ][ ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -1 ][ ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -2 ][ ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -3 ][ ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -4 ][ ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -1 ][ ticker + '_RSI' ] ) and
+            not isnan( data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -2 ][ ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -3 ][ ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -4 ][ ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -1 ][ ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -2 ][ ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -3 ][ ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -4 ][ ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -1 ][ ticker + '_RSI' ] ) and
 
             # Fast-SMA crossed Slow-SMA and stays above
             data.iloc[ -1 ][ ticker + '_SMA_F' ] >= data.iloc[ -1 ][ ticker + '_SMA_S' ]  and
@@ -37,8 +37,8 @@ class signals:
         # Simple Fast-SMA and RSI 
         # Buy when price is below Fast-SMA and RSI is below threshold
         return (
-            not math.isnan( data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -1 ][ ticker + '_RSI' ] ) and
+            not isnan( data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -1 ][ ticker + '_RSI' ] ) and
 
             # Is the current price below the Fast-SMA by the percentage defined in the config file?
             data.iloc[ -1 ][ ticker ] <= data.iloc[ -1 ][ ticker + '_SMA_F' ] - ( data.iloc[ -1 ][ ticker + '_SMA_F' ] * config[ 'buy_below_moving_average' ] ) and
@@ -59,15 +59,15 @@ class signals:
 
         return(        
             # Make sure the data is valid
-            not math.isnan( data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -3 ][ asset.ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -4 ][ asset.ticker + '_SMA_F' ] ) and
-            not math.isnan( data.iloc[ -1 ][ asset.ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -2 ][ asset.ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -3 ][ asset.ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -4 ][ asset.ticker + '_SMA_S' ] ) and
-            not math.isnan( data.iloc[ -1 ][ asset.ticker + '_RSI' ] ) and
+            not isnan( data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -3 ][ asset.ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -4 ][ asset.ticker + '_SMA_F' ] ) and
+            not isnan( data.iloc[ -1 ][ asset.ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -2 ][ asset.ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -3 ][ asset.ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -4 ][ asset.ticker + '_SMA_S' ] ) and
+            not isnan( data.iloc[ -1 ][ asset.ticker + '_RSI' ] ) and
 
             # Fast-SMA crossed Slow-SMA and stays above
             data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] <= data.iloc[ -1 ][ asset.ticker + '_SMA_S' ]  and
