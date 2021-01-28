@@ -17,7 +17,7 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (string) `username` and `password`: Robinhood credentials
 * (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `debug_enabled`: Simulate interactions with Robinhood (via random values)
-* (list) `ticker_list`: List of coin tickers you want to trade (BTC, ETH, etc)
+* (list) `ticker_list`: List of coin ticker pairs Kraken/Robinhood (XETHZUSD/ETH, etc); see [here](https://api.kraken.com/0/public/AssetPairs) for a complete list of available tickers on Kraken
 * (dict) `trade_strategies`: Select which strategies would you like the bot to use (buy, sell)
 * (float) `buy_below_moving_average`: If the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
 * (float) `sell_above_buy_price`: Once the price rises above the Buy price by this percentage, it will try to sell
@@ -27,7 +27,7 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
 * (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
-* (int) `min_seconds_between_updates` and `max_seconds_between_updates`: This bot will pick a random wait time in between readings; use these values to define that range
+* (int) `minutes_between_updates`: How often should the bot spring into action (1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600)
 * (int) `max_data_rows`: Max number of data points to store in the Pickle file (if you have issues with memory limits on your machine). 1k rows = 70kB
 
 ## Running the bot
@@ -36,24 +36,26 @@ If you want to keep the bot running even when you're not logged into your server
 > `nohup ./bot.py &`
 
 The overall flow looks like this:
-* Initialize or load a previously saved state
 * Load the configuration
-* Determine when to run next
-* If it's time to spring into action, download the current price data from Robinhood
-* Compute [moving average](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
+* Initialize or load a previously saved state
+* Load saved data points or download them from Kraken
+* If it's time to spring into action, download the current price data from Kraken
+* Compute [moving averages](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
 * Append this information to a pickle data file
-* Check if the conditions to buy or sell are met
-* If they are, submit the corresponding order and check if it went through
-* Loop again
+* If the conditions to buy or sell are met, submit the corresponding order and check if it went through
+* Rinse and repeat
+
+## Indicators
+### Relative Strength Index
+The RSI trading indicator is a measure of the relative strength of the market (compared to its history), a momentum oscillator and is often used as an overbought and oversold technical indicator. The RSI is displayed as a line graph that moves between two extremes from 0 to 100. Traditional interpretation and usage of the RSI are that values of 70 or above indicate that a security is becoming overvalued and the price of the security is likely to go down in the future (bearish), while the RSI reading of 30 or below indicates an oversold or undervalued condition and the price of the security is likely to go up in the future (bullish).
+
+### Moving Average Convergence/Divergence
+Moving average convergence divergence (MACD) is a trend-following momentum indicator that shows the relationship between two moving averages of a security’s price. The MACD is calculated by subtracting the 26-period [exponential moving average](https://www.investopedia.com/terms/e/ema.asp) (EMA) from the 12-period EMA. The result of that calculation is the MACD line. A nine-day EMA of the MACD called the "signal line," is then plotted on top of the MACD line, which can function as a trigger for buy and sell signals. Traders may buy the security when the MACD crosses above its signal line and sell—or short—the security when the MACD crosses below the signal line. Moving average convergence divergence (MACD) indicators can be interpreted in several ways, but the more common methods are crossovers, divergences, and rapid rises/falls.
 
 ## Technical Analysis
+This bot can implement any technical analysis as a series of conditions on the indicators it collects. Some of them are built into the algorithm, to give you a starting point to create your own. For example, Jason's approach is to buy when the price drops below the Fast-SMA by the percentage configured in the settings, and the RSI is below the threshold specified in the config file. By looking at multiple data points, you can also determine if a crossover happened, and act accordingly. The simple strategy outlined here above can be expanded [in many ways](https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b). To that end, this bot keeps track of a few indicators that can be used to [determine if it's time to buy or sell](https://towardsdatascience.com/algorithmic-trading-with-macd-and-python-fef3d013e9f3): SMA fast, SMA slow, RSI, MACD, MACD Signal. Future versions will include ways to select which approach you would like to use. 
 
-### Relative Strength Index and Simple Moving Average
-The RSI trading indicator is a measure of the relative strength of the market (compared to its history), a momentum oscillator and is often used as an overbought and oversold technical indicator. The RSI is displayed as a line graph that moves between two extremes from 0 to 100. Traditional interpretation and usage of the RSI are that values of 70 or above indicate that a security is becoming overvalued and the price of the security is likely to go down in the future (bearish), while the RSI reading of 30 or below indicates an oversold or undervalued condition and the price of the security is likely to go up in the future (bullish). Our bot uses this information to determine when it's *time to buy*, by checking if the current RSI is below the threshold set in the config file (39.5 by default). It also checks that the current price is below the SMA by the percentage configured in the settings. If those two conditions are met, it will submit a buy using all the available cash in the account (minus the reserve).
-
-The simple strategy outlined here above can be expanded [in many ways](https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b). To that end, this bot keeps track of a few indicators that can be used to [determine if it's time to buy or sell](https://towardsdatascience.com/algorithmic-trading-with-macd-and-python-fef3d013e9f3): SMA fast, SMA slow, RSI, MACD, MACD Signal. Future versions will include ways to select which approach you would like to use. 
-
-### Backtesting
+## Backtesting
 Backtesting is the process of testing a trading or investment strategy using data from the past to see how it would have performed. For example, let's say your trading strategy is to buy Bitcoin when it falls 3% in a day, your backtest software will check Bitcoin's prices in the past and fire a trade when it fell 3% in a day. The backtest results will show if the trades were profitable. At this time, this bot doesn't offer an easy way to ingest past data and run simulations, but it's something I have on my wishlist for sure.
 
 ## Additional Notes
