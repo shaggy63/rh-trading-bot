@@ -13,7 +13,7 @@ You'll need access to a working Python3 interpreter. For the sake of simplicity,
 * [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): `pip3 install pandas`
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
-Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your Robinhood username and password there. You can also customize the script's behavior through the other parameters:
+Once you have all the dependencies in place, copy `config-sample.py` to `config.py` and enter at least your Robinhood username and password. You can also use the following parameters to customize the bot's behavior:
 * (string) `username` and `password`: Robinhood credentials
 * (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `debug_enabled`: Simulate interactions with Robinhood (via random values)
@@ -36,14 +36,14 @@ If you want to keep the bot running even when you're not logged into your server
 > `nohup ./bot.py &`
 
 The overall flow looks like this:
-* Load the configuration
-* Initialize or load a previously saved state
-* Load saved data points or download them from Kraken
-* If it's time to spring into action, download the current price data from Kraken
+* Load the configuration and initialize or load a previously saved state
+* Load saved data points or download new ones from Kraken
+* Every 5 minutes (you can customize this in the settings), download the latest price info from Kraken for each coin
 * Compute [moving averages](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
-* Append this information to a pickle data file
-* If the conditions to buy or sell are met, submit the corresponding order and check if it went through
+* If the conditions to buy or sell are met, submit the corresponding order
 * Rinse and repeat
+
+The bot maintains a list of purchased assets (saved as `orders.pickle`) and at each iteration, it determines if the conditions to sell any of them are met. It also handles swing and miss orders, by checking if any of the orders placed during the previous iteration are still pending (not filled), and cancels them.
 
 ## Indicators
 ### Relative Strength Index
