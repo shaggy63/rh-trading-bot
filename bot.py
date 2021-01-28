@@ -1,21 +1,23 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.0
+# Version: 1.1
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
-from datetime import datetime, timedelta
+from datetime import datetime
 import math
 import numpy as np
 import os.path as path
 import pandas as pd
 import pickle
 import random
+import requests
 import robin_stocks as r
 import sys
 import talib
 import threading
+import time
 
 class asset:
     ticker = ''
@@ -35,7 +37,9 @@ class bot:
         'password': '',
         'trades_enabled': False,
         'debug_enabled': False,
-        'ticker_list': [],
+        'ticker_list': {
+            'XETHZUSD': 'ETH'
+        },
         'trade_strategies': {
             'buy': 'rsi_sma',
             'sell': 'above_buy'
@@ -54,8 +58,7 @@ class bot:
         'rsi_buy_threshold': 39.5,
         'reserve': 0.0,
         'stop_loss_threshold': 0.2,
-        'min_seconds_between_updates': 120,
-        'min_seconds_between_updates': 300,
+        'minutes_between_updates': 1,
         'max_data_rows': 10000
     }
     data = pd.DataFrame()
@@ -113,12 +116,36 @@ class bot:
             # Only track up to a fixed amount of data points
             self.data = self.data.tail( config[ 'max_data_rows' ] - 1 )
         else:
+            # Download historical data from Kraken
             column_names = [ 'timestamp' ]
 
-            for a_ticker in config[ 'ticker_list' ]:
-                column_names.append( a_ticker )
+            for a_robinhood_ticker in config[ 'ticker_list' ].values():
+                column_names.append( a_robinhood_ticker )
 
             self.data = pd.DataFrame( columns = column_names )
+
+            for a_kraken_ticker, a_robinhood_ticker in config[ 'ticker_list' ].items():
+                try:
+                    result = requests.get( 'https://api.kraken.com/0/public/OHLC?interval=' + str( config[ 'minutes_between_updates' ] ) + '&pair=' + a_kraken_ticker ).json()
+                    historical_data = pd.DataFrame( result[ 'result' ][ a_kraken_ticker ] )
+                    historical_data = historical_data[ [ 0, 1 ] ]
+                    
+                    # Be nice to the Kraken API
+                    time.sleep( 3 )
+                except:
+                    print( 'An exception occurred retrieving historical data from Kraken.' )
+
+                # Convert timestamps
+                self.data[ 'timestamp' ] = [ datetime.fromtimestamp( x ).strftime( "%Y-%m-%d %H:%M" ) for x in historical_data[ 0 ] ] 
+
+                # Copy the data
+                self.data[ a_robinhood_ticker ] = [ round( float( x ), 3 ) for x in historical_data[ 1 ] ]
+
+                # Calculate the indicators
+                self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
+                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
+                self.data[ a_robinhood_ticker + '_RSI' ] = talib.RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'rsi_period' ] )
+                self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
 
         # Connect to RobinHood
         if ( not config[ 'debug_enabled' ] ):
@@ -129,10 +156,10 @@ class bot:
                 exit()
 
         # Download RobinHood parameters
-        for a_ticker in config[ 'ticker_list' ]:
+        for a_robinhood_ticker in config[ 'ticker_list' ].values():
             if ( not config[ 'debug_enabled' ] ):
                 try:
-                    result = r.get_crypto_info( a_ticker )
+                    result = r.get_crypto_info( a_robinhood_ticker )
                     s_inc = result[ 'min_order_quantity_increment' ]
                     p_inc = result[ 'min_order_price_increment' ]
                 except:
@@ -142,13 +169,13 @@ class bot:
                 s_inc = 0.0001
                 p_inc = 0.0001
 
-            self.min_share_increments.update( { a_ticker: float( s_inc ) } )
-            self.min_price_increments.update( { a_ticker: float( p_inc ) } )
+            self.min_share_increments.update( { a_robinhood_ticker: float( s_inc ) } )
+            self.min_price_increments.update( { a_robinhood_ticker: float( p_inc ) } )
 
         # Initialize the available_cash amount
         self.available_cash = self.get_available_cash()
 
-        print( '-- Bot Ready ----------------------------' )
+        print( 'Bot Ready' )
 
         return
 
@@ -160,7 +187,7 @@ class bot:
         timediff = now - datetime.strptime( self.data.iloc[ -1 ][ 'timestamp' ], '%Y-%m-%d %H:%M' )
 
         # Not enough data points available or it's been too long since we recorded any data
-        if ( timediff.seconds > config[ 'max_seconds_between_updates' ] * 2 ):
+        if ( timediff.seconds > config[ 'minutes_between_updates' ] * 120 ):
             return False
 
         # Check for break in sequence of samples to minimum consecutive sample number
@@ -169,7 +196,7 @@ class bot:
             for x in range( 0, self.min_consecutive_samples ):
                 timediff = datetime.strptime( self.data.iloc[ position - x ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) - datetime.strptime( self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) 
 
-                if ( timediff.seconds > config[ 'max_seconds_between_updates' ] * 2 ):
+                if ( timediff.seconds > config[ 'minutes_between_updates' ] * 120 ):
                     print( 'Holding trades: interruption found in price data.' )
                     return False
 
@@ -182,26 +209,27 @@ class bot:
         new_row[ 'timestamp' ] = now.strftime( "%Y-%m-%d %H:%M" )
 
         # Calculate moving averages and RSI values
-        for a_ticker in config[ 'ticker_list' ]:
+        for a_kraken_ticker, a_robinhood_ticker in config[ 'ticker_list' ].items():
             if ( not config[ 'debug_enabled' ] ):
                 try:
-                    result = r.get_crypto_quote( a_ticker )
-                    new_row[ a_ticker ] = round( float( result[ 'mark_price' ] ), 3 )
-                
+                    result = requests.get( 'https://api.kraken.com/0/public/Ticker?pair=' + str( a_kraken_ticker ) ).json()
+
+                    if ( len( result[ 'error' ] ) == 0 ):
+                        new_row[ a_robinhood_ticker ] = round( float( result[ 'result' ][ a_kraken_ticker ][ 'a' ][ 0 ] ), 3 )
                 except:
                     print( 'An exception occurred retrieving prices.' )
                     self.is_trading_locked = True
                     return self.data
             else:
-                new_row[ a_ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
+                new_row[ a_robinhood_ticker ] = round( float( random.randint( 10, 100 ) ), 3 )
 
             self.data = self.data.append( new_row, ignore_index = True )
 
             if ( self.data.shape[ 0 ] > 0 ):
-                self.data[ a_ticker + '_SMA_F' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
-                self.data[ a_ticker + '_SMA_S' ] = self.data[ a_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
-                self.data[ a_ticker + '_RSI' ] = talib.RSI( self.data[ a_ticker ].values, timeperiod = config[ 'rsi_period' ] )
-                self.data[ a_ticker + '_MACD' ], self.data[ a_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
+                self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
+                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
+                self.data[ a_robinhood_ticker + '_RSI' ] = talib.RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'rsi_period' ] )
+                self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = talib.MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
 
         return self.data
 
@@ -211,7 +239,7 @@ class bot:
         if ( not config[ 'debug_enabled' ] ):
             try:
                 me = r.account.load_phoenix_account( info=None )
-                available_cash = float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ]
+                available_cash = round( float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ], 3 )
             except:
                 print( 'An exception occurred while reading available cash amount.' )
         else:
@@ -241,6 +269,7 @@ class bot:
         # faster MA over slower MA in an uptrend, slower MA over faster MA in a downtrend
         # https://www.babypips.com/learn/forex/moving-average-crossover-trading
 
+        ## Add your own strategy as a seriers of conditions on the indicators!
         if (
             ( 
                 # Simple Fast-SMA and RSI 
@@ -304,6 +333,7 @@ class bot:
         if ( asset.quantity <= 0.0 or self.is_trading_locked ):
             return False
 
+        ## Add your own strategy as a seriers of conditions on the indicators!
         if (
             (
                 # Simple percentage
@@ -341,7 +371,7 @@ class bot:
         ):   
             # Values needs to be specified to no more precision than listed in min_price_increments. 
             # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-            price = round( math.floor( self.data.iloc[ -1 ][ ticker ] / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
+            price = round( math.floor( self.data.iloc[ -1 ][ asset.ticker ] / self.min_price_increments[ asset.ticker ] ) * self.min_price_increments[ asset.ticker ], 7 )
             profit = round( ( asset.quantity * price ) - ( asset.quantity * asset.price ), 3 )
 
             print( 'Selling ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' for $' + str( price ) + ' (profit: $' + str( profit ) + ')' )
@@ -363,10 +393,8 @@ class bot:
         now = datetime.now()
         self.data = self.get_new_data( now )
 
-        # Determine when to run next
-        next_run = random.randint( config[ 'min_seconds_between_updates' ], config[ 'max_seconds_between_updates' ] )
-        next_time = now + timedelta( 0, next_run )
-        threading.Timer( next_run, self.run ).start()
+        # Schedule the next iteration
+        threading.Timer( config[ 'minutes_between_updates' ] * 60, self.run ).start()
 
         # Print state
         print( '-- ' + str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) + ' ---------------------' )
@@ -421,12 +449,11 @@ class bot:
                     self.is_new_order_added = self.conditional_sell( a_asset ) or self.is_new_order_added
 
         # Buy?
-        for a_ticker in config[ 'ticker_list' ]:
-            self.is_new_order_added = self.conditional_buy( a_ticker ) or self.is_new_order_added
+        for a_robinhood_ticker in config[ 'ticker_list' ].values():
+            self.is_new_order_added = self.conditional_buy( a_robinhood_ticker ) or self.is_new_order_added
 
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
-        print( 'Next run (minute): ' + str( next_time.minute ).zfill( 2 ) )
         print( 'Buying power available: $' + str( self.available_cash ) )
 
         # Save state

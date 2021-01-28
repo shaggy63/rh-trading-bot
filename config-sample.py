@@ -3,7 +3,9 @@ config = {
     'password': "",
     'trades_enabled': False, # if False, just collect data
     'debug_enabled': False, # if enabled, just pretend to connect to Robinhood
-    'ticker_list': [ 'ETH' ], # list of coin tickers (BTC, ETH, etc)
+    'ticker_list': { # list of coin ticker pairs Kraken/Robinhood (XETHZUSD/ETH, etc) - https://api.kraken.com/0/public/AssetPairs
+        'XETHZUSD': 'ETH'
+    }, 
     'trade_strategies': { # select which strategies would you like the bot to use (buy, sell); see documentation for more info
         'buy': 'rsi_sma',
         'sell': 'above_buy'
@@ -22,7 +24,6 @@ config = {
     'rsi_buy_threshold': 39.5, # threshold to trigger a buy
     'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
     'stop_loss_threshold': 0.3,   # sell if the price drops at least 30% below the purchase price
-    'min_seconds_between_updates': 120,
-    'max_seconds_between_updates': 300,
+    'minutes_between_updates': 5, # 1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600
     'max_data_rows': 10000
 }
