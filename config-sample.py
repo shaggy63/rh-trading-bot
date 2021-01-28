@@ -7,7 +7,7 @@ config = {
         'XETHZUSD': 'ETH'
     }, 
     'trade_strategies': { # select which strategies would you like the bot to use (buy, sell); see documentation for more info
-        'buy': 'rsi_sma_f',
+        'buy': 'sma_rsi_threshold',
         'sell': 'above_buy'
     },
     'buy_below_moving_average': 0.0075, # buy if price drops below Fast_MA by this percentage (0.75%)
@@ -21,7 +21,10 @@ config = {
         'macd_signal': 28
     },
     'rsi_period': 48, # data points for RSI
-    'rsi_buy_threshold': 39.5, # threshold to trigger a buy
+    'rsi_threshold': { # RSI thresholds to trigger a buy or a sell order
+        'buy': 39.5,
+        'sell': 60
+    },
     'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
     'stop_loss_threshold': 0.3,   # sell if the price drops at least 30% below the purchase price
     'minutes_between_updates': 5, # 1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600

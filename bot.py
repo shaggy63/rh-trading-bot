@@ -1,10 +1,12 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.1
+# Version: 1.2
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
+from signals import signals
+
 from datetime import datetime
 import math
 import numpy as np
@@ -41,7 +43,7 @@ class bot:
             'XETHZUSD': 'ETH'
         },
         'trade_strategies': {
-            'buy': 'rsi_sma',
+            'buy': 'sma_rsi_threshold',
             'sell': 'above_buy'
         },
         'buy_below_moving_average': 0.0075,
@@ -55,7 +57,7 @@ class bot:
             'macd_signal': 28
         },
         'rsi_period': 48,
-        'rsi_buy_threshold': 39.5,
+        'rsi_threshold': 39.5,
         'reserve': 0.0,
         'stop_loss_threshold': 0.3,
         'minutes_between_updates': 5,
@@ -71,6 +73,8 @@ class bot:
     available_cash = 0
     is_trading_locked = False # used to determine if we have had a break in our incoming price data and hold buys if so
     is_new_order_added = False # the bot performs certain cleanup operations after new orders are sent out
+
+    signal = signals()
 
     def __init__( self ):
         # Set Pandas to output all columns in the dataframe
@@ -257,137 +261,55 @@ class bot:
 
         return True
 
-    # The two methods here below (conditional_buy, conditional_sell) implement various trading strategies
-    def conditional_buy( self, ticker ):
+    def buy( self, ticker ):
         if ( self.available_cash < config[ 'buy_amount_per_trade' ] or self.is_trading_locked ):
             return False
+        
+        # Values need to be specified to no more precision than listed in min_price_increments.
+        # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
+        price = round( math.floor( self.data.iloc[ -1 ][ ticker ] / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
+        
+        # How much to buy depends on the configuration
+        quantity = ( self.available_cash if ( config[ 'buy_amount_per_trade' ] == 0 ) else config[ 'buy_amount_per_trade' ] ) / price
+        quantity = round( math.floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
 
-        # MASlow = self.data.iloc[ -1 ][ ticker + '_SMA_S' ]
-        # MACD = self.data.iloc[ -1 ][ ticker + '_MACD' ]
-        # MACD_SIG = self.data.iloc[ -1 ][ ticker + '_MACD_S' ]
+        print( 'Buying ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price ) )
 
-        # faster MA over slower MA in an uptrend, slower MA over faster MA in a downtrend
-        # https://www.babypips.com/learn/forex/moving-average-crossover-trading
+        if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
+            try:
+                buy_info = r.order_buy_crypto_limit( str( ticker ), quantity, price )
 
-        ## Add your own strategy as a seriers of conditions on the indicators!
-        if (
-            ( 
-                # Simple Fast-SMA and RSI 
-                # Buy when price is below Fast-SMA and RSI is below threshold
-                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma_f' and
+                # Add this new asset to our orders
+                self.orders[ buy_info[ 'id' ] ] = asset( ticker, quantity, price, buy_info[ 'id' ] )
+            except:
+                print( 'Got exception trying to buy, aborting.' )
+                return False
 
-                # Make sure the data is valid
-                not math.isnan( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
-                not math.isnan( self.data.iloc[ -1 ][ ticker + '_RSI' ] ) and
+        return True
 
-                # Is the current price below the Fast-SMA by the percentage defined in the config file?
-                self.data.iloc[ -1 ][ ticker ] <= self.data.iloc[ -1 ][ ticker + '_SMA_F' ] - ( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] * config[ 'buy_below_moving_average' ] ) and
-
-                # RSI below the threshold
-                self.data.iloc[ -1 ][ ticker + '_RSI' ] <= config[ 'rsi_buy_threshold' ] 
-            )
-            or
-            (
-                # Fast-SMA and RSI - Credits: https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b
-                # Buy when price crosses down Fast-SMA, RSI is above 50
-                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma_50' and
-                
-                # Make sure the data is valid
-                not math.isnan( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
-                not math.isnan( self.data.iloc[ -2 ][ ticker + '_SMA_F' ] ) and
-                not math.isnan( self.data.iloc[ -1 ][ ticker + '_RSI' ] ) and
-
-                # Price crosses down Fast-SMA (i.e., it was greater than Fast-SMA before, and it went below in the last reading)
-                self.data.iloc[ -1 ][ ticker ] > self.data.iloc[ -2 ][ ticker + '_SMA_F' ]  and
-                self.data.iloc[ -1 ][ ticker ] <= self.data.iloc[ -1 ][ ticker + '_SMA_F' ] - ( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] * config[ 'buy_below_moving_average' ] ) and
-                
-                # RSI above 50
-                self.data.iloc[ -1 ][ ticker + '_RSI' ] > 50
-            )
-        ):
-            # Values need to be specified to no more precision than listed in min_price_increments.
-            # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-            price = round( math.floor( self.data.iloc[ -1 ][ ticker ] / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
-            
-            # How much to buy depends on the configuration
-            quantity = ( self.available_cash if ( config[ 'buy_amount_per_trade' ] == 0 ) else config[ 'buy_amount_per_trade' ] ) / price
-            quantity = round( math.floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
-    
-            print( 'Buying ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price ) )
-
-            if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
-                try:
-                    buy_info = r.order_buy_crypto_limit( str( ticker ), quantity, price )
-
-                    # Add this new asset to our orders
-                    self.orders[ buy_info[ 'id' ] ] = asset( ticker, quantity, price, buy_info[ 'id' ] )
-                except:
-                    print( 'Got exception trying to buy, aborting.' )
-                    return False
-
-            return True
-        return False
-
-    def conditional_sell( self, asset ):
+    def sell( self, asset ):
         # Do we have enough of this asset to sell?
         if ( asset.quantity <= 0.0 or self.is_trading_locked ):
             return False
+           
+        # Values needs to be specified to no more precision than listed in min_price_increments. 
+        # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
+        price = round( math.floor( self.data.iloc[ -1 ][ asset.ticker ] / self.min_price_increments[ asset.ticker ] ) * self.min_price_increments[ asset.ticker ], 7 )
+        profit = round( ( asset.quantity * price ) - ( asset.quantity * asset.price ), 3 )
 
-        ## Add your own strategy as a seriers of conditions on the indicators!
-        if (
-            (
-                # Simple percentage
-                config[ 'trade_strategies' ][ 'sell' ] == 'above_buy' and
+        print( 'Selling ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' for $' + str( price ) + ' (profit: $' + str( profit ) + ')' )
 
-                # Is the current price above the purchase price by the percentage set in the config file?
-                self.data.iloc[ -1 ][ asset.ticker ] > asset.price + ( asset.price * config[ 'profit_percentage' ] )
-            )
-            or
-            (
-                # Fast-SMA and RSI - Credits: https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b
-                # Sell when price crosses up Fast-SMA, RSI is below 60
-                config[ 'trade_strategies' ][ 'sell' ] == 'rsi_sma_60' and
+        if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
+            try:
+                sell_info = r.order_sell_crypto_limit( str( asset.ticker ), asset.quantity, price )
 
-                # Make sure the data is valid
-                not math.isnan( self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] ) and
-                not math.isnan( self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] ) and
-                not math.isnan( self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] ) and
+                # Mark this asset as sold, the garbage collector (see 'run' method) will remove it from our orders at the next iteration
+                self.orders[ asset.order_id ].quantity = 0
+            except:
+                print( 'Got exception trying to sell, aborting.' )
+                return False
 
-                # Price crosses up Fast-SMA (i.e., it was less than Fast-SMA before, and it went above in the last reading)
-                self.data.iloc[ -1 ][ asset.ticker ] < self.data.iloc[ -2 ][ asset.ticker + '_SMA_F' ] and
-                self.data.iloc[ -1 ][ asset.ticker ] >= self.data.iloc[ -1 ][ asset.ticker + '_SMA_F' ] and
-                
-                # RSI below 60
-                self.data.iloc[ -1 ][ asset.ticker + '_RSI' ] < 60 and
-
-                # Price is greater than purchase price by at least profit percentage
-                self.data.iloc[ -1 ][ asset.ticker ] >= asset.price + (  asset.price * config[ 'profit_percentage' ] )
-            )
-            or 
-            (
-                # Stop-loss: is the current price below the purchase price by the percentage defined in the config file?
-                self.data.iloc[ -1 ][ asset.ticker ] < asset.price - ( asset.price * config[ 'stop_loss_threshold' ] )
-            )
-        ):   
-            # Values needs to be specified to no more precision than listed in min_price_increments. 
-            # Truncate to 7 decimal places to avoid floating point problems way out at the precision limit
-            price = round( math.floor( self.data.iloc[ -1 ][ asset.ticker ] / self.min_price_increments[ asset.ticker ] ) * self.min_price_increments[ asset.ticker ], 7 )
-            profit = round( ( asset.quantity * price ) - ( asset.quantity * asset.price ), 3 )
-
-            print( 'Selling ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' for $' + str( price ) + ' (profit: $' + str( profit ) + ')' )
-
-            if ( config[ 'trades_enabled' ] and not config[ 'debug_enabled' ] ):
-                try:
-                    sell_info = r.order_sell_crypto_limit( str( asset.ticker ), asset.quantity, price )
-
-                    # Mark this asset as sold, the garbage collector (see 'run' method) will remove it from our orders at the next iteration
-                    self.orders[ asset.order_id ].quantity = 0
-                except:
-                    print( 'Got exception trying to sell, aborting.' )
-                    return False
-
-            return True
-        return False
+        return True
 
     def run( self ):
         now = datetime.now()
@@ -446,15 +368,22 @@ class bot:
                         print( "\n" )
 
                     # Is it time to sell any of them?
-                    self.is_new_order_added = self.conditional_sell( a_asset ) or self.is_new_order_added
+                    if ( 
+                        getattr( self.signal, 'sell_' + str(  config[ 'trade_strategies' ][ 'sell' ] ) )( a_asset, self.data ) or
+
+                        # Stop-loss: is the current price below the purchase price by the percentage defined in the config file?
+                        ( self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'stop_loss_threshold' ] ) )
+                    ):
+                        self.is_new_order_added = self.sell( a_asset ) or self.is_new_order_added
 
         # Buy?
         for a_robinhood_ticker in config[ 'ticker_list' ].values():
-            self.is_new_order_added = self.conditional_buy( a_robinhood_ticker ) or self.is_new_order_added
+            if ( getattr( self.signal, 'buy_' + str(  config[ 'trade_strategies' ][ 'buy' ] ) )( a_robinhood_ticker, self.data ) ):
+                self.is_new_order_added = self.buy( a_robinhood_ticker ) or self.is_new_order_added
 
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
-        print( 'Buying power available: $' + str( self.available_cash ) )
+        print( 'Buying power: $' + str( self.available_cash ) )
 
         # Save state
         with open( 'orders.pickle', 'wb' ) as f:
