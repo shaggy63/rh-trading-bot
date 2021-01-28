@@ -48,17 +48,17 @@ class bot:
         'profit_percentage': 0.01,
         'buy_amount_per_trade': 0,
         'moving_average_periods': {
-            'sma_fast': 40,
-            'sma_slow': 200,
-            'macd_fast': 40,
-            'macd_slow': 120,
-            'macd_signal': 25
+            'sma_fast': 48, # 12 data points per hour, 4 hours worth of data
+            'sma_slow': 192,
+            'macd_fast': 48,
+            'macd_slow': 104, # MACD 12/26 -> 48/104
+            'macd_signal': 28
         },
-        'rsi_period': 20,
+        'rsi_period': 48,
         'rsi_buy_threshold': 39.5,
         'reserve': 0.0,
-        'stop_loss_threshold': 0.2,
-        'minutes_between_updates': 1,
+        'stop_loss_threshold': 0.3,
+        'minutes_between_updates': 5,
         'max_data_rows': 10000
     }
     data = pd.DataFrame()
@@ -274,7 +274,7 @@ class bot:
             ( 
                 # Simple Fast-SMA and RSI 
                 # Buy when price is below Fast-SMA and RSI is below threshold
-                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma' and
+                config[ 'trade_strategies' ][ 'buy' ] == 'rsi_sma_f' and
 
                 # Make sure the data is valid
                 not math.isnan( self.data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
