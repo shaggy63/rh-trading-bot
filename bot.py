@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.2
+# Version: 1.3
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -60,6 +60,7 @@ class bot:
         'reserve': 0.0,
         'stop_loss_threshold': 0.3,
         'minutes_between_updates': 5,
+        'save_charts': True,
         'max_data_rows': 10000
     }
     data = pd.DataFrame()
@@ -228,11 +229,20 @@ class bot:
 
             self.data = self.data.append( new_row, ignore_index = True )
 
-            if ( self.data.shape[ 0 ] > 0 ):
+            # If the Kraken API is overloaded, they freeze the values it returns
+            if ( ( self.data.tail( 4 )[ a_robinhood_ticker ].to_numpy()[ -1 ] == self.data.tail( 4 )[ a_robinhood_ticker ].to_numpy() ).all() ):
+                print( 'Repeating values detected for ' + str( a_robinhood_ticker ) + '. Ignoring data point.' )
+                self.data = self.data[:-1]
+            elif ( self.data.shape[ 0 ] > 0 ):
                 self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
                 self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
                 self.data[ a_robinhood_ticker + '_RSI' ] = RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'rsi_period' ] )
                 self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
+
+            if ( config[ 'save_charts' ] == True ):
+                slice = self.data[ [ a_robinhood_ticker, str( a_robinhood_ticker ) + '_SMA_F', str( a_robinhood_ticker ) + '_SMA_S' ] ]
+                fig = slice.plot.line().get_figure()
+                fig.savefig( 'chart-' + str( a_robinhood_ticker ).lower() + '-sma.png', dpi = 300 )
 
         return self.data
 

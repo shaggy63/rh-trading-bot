@@ -6,7 +6,7 @@ class signals:
     def buy_sma_crossover_rsi( self, ticker, data ):
         # Moving Average Crossover with RSI Filter
         # Credits: https://trader.autochartist.com/moving-average-crossover-with-rsi-filter/
-        # Buy when Fast-SMA crosses Slow-SMA fro below, and stays above for 3 consecutive readings, and RSI > buy threshold (50 suggested)
+        # Buy when Fast-SMA crosses Slow-SMA from below, and stays above for 3 consecutive readings, and RSI > buy threshold (50 suggested)
 
         return(        
             # Make sure the data is valid
@@ -36,6 +36,7 @@ class signals:
     def buy_sma_rsi_threshold( self, ticker, data ):
         # Simple Fast-SMA and RSI 
         # Buy when price is below Fast-SMA and RSI is below threshold
+        
         return (
             not isnan( data.iloc[ -1 ][ ticker + '_SMA_F' ] ) and
             not isnan( data.iloc[ -1 ][ ticker + '_RSI' ] ) and
@@ -49,6 +50,7 @@ class signals:
 
     def sell_above_buy( self, asset, data ):
         # Simple percentage
+        
         return (
             data.iloc[ -1 ][ asset.ticker ] > asset.price + ( asset.price * config[ 'profit_percentage' ] )
         )

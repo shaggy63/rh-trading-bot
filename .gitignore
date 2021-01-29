@@ -1,4 +1,5 @@
-config.py
+__pycache__
 *.out
 *.pickle
-__pycache__
+*.png
+config.py

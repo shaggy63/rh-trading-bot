@@ -14,11 +14,11 @@ config = {
     'profit_percentage': 0.01, # sell if price raises above purchase price by this percentage (1%)
     'buy_amount_per_trade': 0, # if greater than zero, buy this amount of coin, otherwise use all the cash in the account
     'moving_average_periods': { # data points needed to calculate SMA fast, SMA slow, MACD fast, MACD slow, MACD signal
-        'sma_fast': 48, # 12 data points per hour, 4 hours worth of data
-        'sma_slow': 192,
-        'macd_fast': 48,
-        'macd_slow': 104, # MACD 12/26 -> 48/104
-        'macd_signal': 28
+        'sma_fast': 24, # 12 data points per hour, 2 hours worth of data
+        'sma_slow': 96,
+        'macd_fast': 24,
+        'macd_slow': 52, # MACD 12/26 -> 24/52
+        'macd_signal': 14
     },
     'rsi_period': 48, # data points for RSI
     'rsi_threshold': { # RSI thresholds to trigger a buy or a sell order
@@ -28,5 +28,6 @@ config = {
     'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
     'stop_loss_threshold': 0.3,   # sell if the price drops at least 30% below the purchase price
     'minutes_between_updates': 5, # 1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600
+    'save_charts': True,
     'max_data_rows': 10000
 }
