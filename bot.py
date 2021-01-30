@@ -9,6 +9,7 @@ from signals import signals
 
 from datetime import datetime
 from math import floor
+import matplotlib.pyplot as plt
 import numpy as np
 import os.path as path
 import pandas as pd
@@ -243,6 +244,7 @@ class bot:
                 slice = self.data[ [ a_robinhood_ticker, str( a_robinhood_ticker ) + '_SMA_F', str( a_robinhood_ticker ) + '_SMA_S' ] ]
                 fig = slice.plot.line().get_figure()
                 fig.savefig( 'chart-' + str( a_robinhood_ticker ).lower() + '-sma.png', dpi = 300 )
+                plt.close( fig )
 
         return self.data
 
