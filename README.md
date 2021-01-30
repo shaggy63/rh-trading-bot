@@ -28,6 +28,7 @@ Once you have all the dependencies in place, copy `config-sample.py` to `config.
 * (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
 * (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
 * (int) `minutes_between_updates`: How often should the bot spring into action (1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600)
+* (bool) `save_charts`: Enable this feature to have the bot save SMA charts for each coin it's handling
 * (int) `max_data_rows`: Max number of data points to store in the Pickle file (if you have issues with memory limits on your machine). 1k rows = 70kB
 
 ## Running the bot
